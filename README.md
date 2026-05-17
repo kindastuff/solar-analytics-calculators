@@ -58,6 +58,14 @@ Each tool includes inline help text explaining required inputs and expected outp
 
 ---
 
+## 📐 Calculation Methodology
+
+For complete formulas, variable definitions, and industry standard references (IEC 61724-1, IEC 61215, etc.), see:
+
+👉 **[Full Calculation Methodology](METHODOLOGY.md)**
+
+---
+
 ## 📄 License
 
 This repository documents the methodology behind the calculators. The website code is not open-source, but the formulas and calculation logic follow public industry standards.
