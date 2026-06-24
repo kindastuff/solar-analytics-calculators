@@ -1,6 +1,6 @@
 # Calculation Methodology — Kindastuff Solar Analytics
 
-This document describes the formulas, variable definitions, and industry standard references used in the Kindastuff solar analytics calculators.
+This document describes the formulas, variable definitions, input validation rules, and industry standard references used in the Kindastuff solar analytics calculators.
 
 The website source code is not open-source. The calculation logic, however, is based on publicly documented industry standards and is described here for transparency and peer review.
 
@@ -13,8 +13,10 @@ The website source code is not open-source. The calculation logic, however, is b
 3. [Specific Yield](#3-specific-yield)
 4. [Reference Yield](#4-reference-yield)
 5. [Performance Target Index (PTI)](#5-performance-target-index-pti)
-6. [Variable Reference Table](#6-variable-reference-table)
-7. [Standards Referenced](#7-standards-referenced)
+6. [Capacity-Based Performance Ratio (PR)](#6-capacity-based-performance-ratio-pr)
+7. [Efficiency-Based Performance Ratio (PR)](#7-efficiency-based-performance-ratio-pr)
+8. [Variable Reference Table](#6-variable-reference-table)
+9. [Standards Referenced](#7-standards-referenced)
 
 ---
 
@@ -288,7 +290,145 @@ PTI = Y_f_daily / (Y_r_daily × PR_expected)
 
 ---
 
-## 6. Variable Reference Table
+## 6. Capacity-Based Performance Ratio (PR)
+
+### 6.1 Definition
+
+The Capacity-Based Performance Ratio (PR) compares a solar plant's actual energy output to a reference energy yield derived from measured plane-of-array irradiance. It is normalized using the installed DC capacity and the STC reference irradiance of 1 kW/m², as defined in IEC 61724-1. It is the standard and the most widely used performance index in utility-scale and C&I solar O&M practice.
+
+### 6.2 Standard Reference
+
+**IEC 61724-1:2021, Section 7.5 — Performance Ratio (PR)**
+
+> PR = Y_f / Y_r
+
+Where:
+- `Y_f` = Final Yield = E_AC / P_o (kWh/kWp)
+- `Y_r` = Reference Yield = H_i / G_STC (hours)
+- `P_o` = rated DC power at STC (kWp)
+- `G_STC` = 1 kW/m² (fixed constant, non-adjustable)
+
+Expanding:
+
+```
+PR = [ E_AC / P_DC ] / [ H_POA / G_STC ]
+```
+
+Which simplifies to:
+
+```
+PR (%) = [ E_AC / (P_DC × H_POA / G_STC) ] × 100
+```
+
+### 6.3 Inputs
+
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| Energy Generated | Net AC energy output during the period | kWh | ≥ 0.01 |
+| Plant DC Capacity | Total nameplate DC capacity of installed PV modules at STC | kWp | ≥ 0.01 |
+| POA Insolation | Measured plane-of-array insolation during the same period | kWh/m² | ≥ 0.01 |
+| Irradiance @ STC | Standard test condition irradiance reference | kW/m² | Fixed at 1 — not user-adjustable |
+
+### 6.4 Output Flags
+
+| Result | Flag |
+|--------|------|
+| PR > 96% | ⚠️ "Suspiciously High" — verify input data quality |
+| PR > 100% | ❌ "Statistical Error" — result is physically impossible; check inputs |
+
+**Why 96% is the suspicion threshold:** Real-world capacity-based PR values above 95–96% are extremely rare under normal operating conditions. Values in this range almost always indicate a data quality issue — misaligned irradiance sensor, incorrect DC capacity entry, or time-alignment errors between energy and irradiance records.
+
+### 6.5 Implementation Notes
+
+- `G_STC` is fixed at **1 kW/m²** and is not user-adjustable. This is consistent with IEC 61724-1:2021, which defines G_STC as a fixed physical constant.
+- This calculator uses **DC nameplate capacity** as the normalisation reference, following IEC 61724-1. Using AC capacity instead would conflate inverter sizing decisions with module-level generation performance.
+- POA insolation must be measured at the same tilt and azimuth as the PV array. Using GHI instead of POA will produce systematically incorrect PR values — typically 5–15% lower depending on tilt and latitude.
+
+### 6.6 Worked Example
+
+| Input | Value |
+|-------|-------|
+| Energy Generated | 450 kWh |
+| Plant DC Capacity | 100 kWp |
+| POA Insolation | 5.5 kWh/m² |
+| Irradiance @ STC | 1.0 kW/m² (fixed) |
+
+```
+Y_f = 450 / 100 = 4.5 kWh/kWp
+Y_r = 5.5 / 1.0 = 5.5 h
+PR = (4.5 / 5.5) × 100 = 81.8%
+```
+
+**Result: 81.8%**
+
+### 6.7 Limitations
+
+- Capacity-based PR does not correct for temperature effects. In high-temperature periods, PR will decrease even when the plant is operating correctly. Use [Temperature-Corrected PR](#9-temperature-corrected-performance-ratio-pr) for temperature-normalised analysis.
+- PR is highly sensitive to POA sensor accuracy. Sensor soiling, misalignment, or calibration drift directly shifts the PR result.
+- In DC-oversized plants, inverter clipping during peak irradiance reduces AC output while POA continues to accumulate, which will suppress PR even when the plant is performing as designed.
+- Capacity-based PR is most reliable for trend analysis within the same plant over consistent periods. Cross-plant PR comparisons require confirmation that capacity conventions, sensor placement, and time-alignment methods are identical.
+
+---
+
+## 7. Efficiency-Based Performance Ratio (PR)
+
+### 7.1 Definition
+
+Efficiency-Based Performance Ratio (PR) compares a solar plant's actual energy output to a reference energy yield calculated from measured plane-of-array irradiance, the total active module area, and the module reference efficiency.
+
+### 7.2 Standard Reference
+
+The standard International Electrotechnical Commission IEC 61724-1 defines PR as the ratio of Final Yield to Reference Yield
+
+> PR = Y_f / Y_r
+
+If the reference power is algebraically expressed as
+
+```
+P_eff = A_total × η_module × G_STC
+```
+
+Where `P_eff` is the effective reference power (kW) at STC. The PR is then:
+
+```
+PR (%) = [ E_AC / (P_eff × H_POA / G_STC) ] × 100
+```
+
+Expanding:
+
+```
+PR (%) = [ E_AC / (A_total × η_module × H_POA) ] × 100
+```
+
+### 7.3 Inputs
+
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| Energy Generated | Net AC energy output during the period | kWh | ≥ 0.01 |
+| POA Insolation | Measured plane-of-array insolation during the same period | kWh/m² | ≥ 0.01 |
+| Total Active Module Area | Total active surface area of all PV modules installed in the plant. Excludes land area, walkways, spacing, and non-generating surfaces | m² | ≥ 0.01 |
+| Module Efficiency | Rated module conversion efficiency from manufacturer datasheet | % | 10% – 40% |
+
+**On Module Efficiency range:** The validation range of 10–40% reflects the practical boundaries of commercially available PV technology. Standard monocrystalline silicon modules typically fall between 19–23%. Thin-film modules range from approximately 10–18%. Values outside 10–40% are rejected as likely input errors.
+
+### 7.4 Output Flags
+
+Same thresholds as Capacity-Based PR:
+
+| Result | Flag |
+|--------|------|
+| PR > 96% | ⚠️ "Suspiciously High" — verify input data quality |
+| PR > 100% | ❌ "Statistical Error" — result is physically impossible; check inputs |
+
+### 7.5 Limitations
+
+- Efficiency-based PR is sensitive to the accuracy of the module efficiency input. Using a datasheet efficiency value that does not reflect actual in-field module condition (post-degradation) will overstate the reference power and understate PR.
+- Like capacity-based PR, this method does not correct for temperature effects.
+- Total Active Module Area must accurately represent the generating surface only. Including non-active area (frame borders, spacing) will inflate the area input and suppress the PR result.
+
+
+
+## 8. Variable Reference Table
 
 | Symbol | Full Name | Unit | IEC 61724-1 Reference |
 |---|---|---|---|
@@ -310,7 +450,7 @@ PTI = Y_f_daily / (Y_r_daily × PR_expected)
 
 ---
 
-## 7. Standards Referenced
+## 9. Standards Referenced
 
 | Standard | Title | Relevance |
 |---|---|---|
