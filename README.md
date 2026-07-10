@@ -40,7 +40,7 @@ Unlike most solar software that requires account creation and data uploads, **Ki
 
 ## 👷 Built for Solar Professionals, By a Solar Professional
 
-Kindastuff was created by **Aman Yadav**, a renewable energy engineer with hands-on experience in plant operations, performance monitoring, and data analytics.
+Kindastuff was created by **Aman Yadav**, a solar plant performance engineer with hands-on experience in plant operations, performance monitoring, and data analytics.
 
 > *"If a tool is genuinely useful, it should be accessible to everyone—not just those with enterprise budgets."*
 
