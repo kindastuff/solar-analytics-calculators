@@ -15,8 +15,9 @@ The website source code is not open-source. The calculation logic, however, is b
 5. [Performance Target Index (PTI)](#5-performance-target-index-pti)
 6. [Capacity-Based Performance Ratio (PR)](#6-capacity-based-performance-ratio-pr)
 7. [Efficiency-Based Performance Ratio (PR)](#7-efficiency-based-performance-ratio-pr)
-8. [Variable Reference Table](#6-variable-reference-table)
-9. [Standards Referenced](#7-standards-referenced)
+8. [Solar Inverter Efficiency Dashboard](#8-solar-inverter-efficiency-dashboard)
+9. [Variable Reference Table](#9-variable-reference-table)
+10. [Standards Referenced](#10-standards-referenced)
 
 ---
 
@@ -363,7 +364,7 @@ PR = (4.5 / 5.5) × 100 = 81.8%
 
 ### 6.7 Limitations
 
-- Capacity-based PR does not correct for temperature effects. In high-temperature periods, PR will decrease even when the plant is operating correctly. Use [Temperature-Corrected PR](#9-temperature-corrected-performance-ratio-pr) for temperature-normalised analysis.
+- Capacity-based PR does not correct for temperature effects. In high-temperature periods, PR will decrease even when the plant is operating correctly. Use [Temperature-Corrected PR](https://kindastuff.com/temperature-corrected-pr/) for temperature-normalised analysis.
 - PR is highly sensitive to POA sensor accuracy. Sensor soiling, misalignment, or calibration drift directly shifts the PR result.
 - In DC-oversized plants, inverter clipping during peak irradiance reduces AC output while POA continues to accumulate, which will suppress PR even when the plant is performing as designed.
 - Capacity-based PR is most reliable for trend analysis within the same plant over consistent periods. Cross-plant PR comparisons require confirmation that capacity conventions, sensor placement, and time-alignment methods are identical.
@@ -426,47 +427,221 @@ Same thresholds as Capacity-Based PR:
 - Like capacity-based PR, this method does not correct for temperature effects.
 - Total Active Module Area must accurately represent the generating surface only. Including non-active area (frame borders, spacing) will inflate the area input and suppress the PR result.
 
+## 8. Solar Inverter Efficiency Dashboard
+ 
+### 8.1 Definition
 
+The Solar Inverter Efficiency Dashboard quantifies the DC-to-AC conversion efficiency of individual inverters from time-stamped field data uploaded as a CSV or Excel file. It applies the efficiency formula to every valid row in the dataset and aggregates results per inverter, producing statistical summaries, diagnostic charts, and a filterable record-level explorer entirely within the user's browser.
 
-## 8. Variable Reference Table
+This tool isolates the inverter conversion stage only. It does not calculate Performance Ratio, which requires irradiance and capacity inputs and captures losses across the full system. For whole-plant performance analysis, see the [Capacity-Based PR](#6-capacity-based-performance-ratio-pr) or [Efficiency-Based PR](#7-efficiency-based-performance-ratio-pr) sections.
+
+### 8.2 Standard Reference
+ 
+**IEC 61683:1999 — Photovoltaic systems — Power conditioners — Procedure for measuring efficiency**
+ 
+IEC 61683 defines the efficiency measurement procedure for PV inverters, including the CEC-weighted and European-weighted (Euro-eta) efficiency methods used in inverter datasheets. Both are laboratory-derived figures that weight inverter performance across standardised load points (10%, 20%, 30%, 50%, 75%, and 100% of rated power).
+
+This dashboard operates on the same conversion-efficiency principle but applied to field-recorded operating data rather than controlled laboratory test points. The result is actual observed conversion efficiency under real installation conditions — not a standardised weighted figure. The two are complementary: datasheet efficiency characterises the device under ideal conditions; field efficiency characterises what the device is actually delivering in operation.
+ 
+### 8.3 Core Formula
+ 
+```
+η (%) = (P_AC / P_DC) × 100
+```
+
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `P_AC` | AC output power measured at inverter terminals at the recorded timestamp | W or kW |
+| `P_DC` | DC input power measured at the inverter input (from array or combiner box) at the same timestamp | W or kW |
+| `η` | DC-to-AC conversion efficiency | % |
+
+**Unit requirement:** `P_AC` and `P_DC` must be in the same unit within the uploaded file. The calculator does not perform automatic unit conversion between W and kW. A unit mismatch between the two columns is the most common source of physically impossible results (η >> 100% or η << 1%).
+
+### 8.4 Input File Requirements
+ 
+| Column | Description | Required |
+|--------|-------------|----------|
+| `Timestamp` | Date and time of the reading | Yes |
+| `Inverter` | Inverter identifier (name or ID) | Yes |
+| `DC Power` | DC input power at the inverter | Yes |
+| `AC Power` | AC output power at the inverter terminals | Yes |
+ 
+**Column name matching:** Case-insensitive. Underscore and space variations are accepted (e.g., `DC_Power`, `DCPower`, `dc power` are all valid). Column names are matched using regex pattern matching — the parser does not require exact header strings.
+
+**File constraints:**
+- Accepted formats: `.csv`, `.xlsx`, `.xls`
+- Maximum file size: 5 MB
+- Maximum rows: 1,000 per upload
+- Maximum unique inverter identifiers: 5 per upload
+If any of the file constraints are exceeded, processing is aborted and the user is notified. The 5-inverter and 1,000-row limits reflect browser-side processing capacity, not engineering limitations — for larger datasets, split by date range or inverter group and analyse each batch separately.
+
+### 8.5 Row Validation Rules
+ 
+Every row is evaluated against the following rules before being included in calculations:
+ 
+| Condition | Classification | Reason |
+|-----------|---------------|--------|
+| Both `DC Power` and `AC Power` are finite, non-NaN numbers | Proceeds to efficiency check | — |
+| `DC Power` = 0 | **Invalid** | Division by zero — efficiency is undefined |
+| `DC Power` < 0 or `AC Power` < 0 | **Invalid** | Negative power values violate physical bounds |
+| `AC Power` > `DC Power` (η > 100%) | **Invalid** | Flagged as "Suspicious Efficiency" — physically impossible for a conversion device |
+| η < 0% | **Invalid** | Negative efficiency violates physical bounds |
+| Row is empty or whitespace-only | Ignored | Not counted in any total |
+
+**On the η > 100% rule:** An inverter cannot deliver more AC power than the DC power it receives — conversion always involves losses. A result above 100% always indicates a data problem: unit mismatch between DC and AC columns, a timestamp offset between two separate meters, or a CT/sensor scaling error. These rows are flagged as "Suspicious Efficiency" in the validation log and excluded from all statistical calculations.
+ 
+**Valid rows** are those where both power values are finite, positive, `DC Power` > 0, and the resulting η falls within 0%–100% inclusive.
+
+### 8.6 Statistical Outputs Per Inverter
+ 
+For each inverter, the following statistics are computed from all valid rows attributed to that device:
+ 
+| Metric | Formula | Description |
+|--------|---------|-------------|
+| Average Efficiency | `η̄ = Σηᵢ / N` | Arithmetic mean of all valid per-row efficiency values |
+| Median Efficiency | Middle value of sorted η values | Robust central tendency — less sensitive to outlier rows than the mean |
+| Standard Deviation | `σ = √[ Σ(ηᵢ − η̄)² / N ]` | Population standard deviation; measures consistency of conversion performance |
+| Minimum Efficiency | `min(ηᵢ)` | Lowest single-row efficiency across all valid records |
+| Maximum Efficiency | `max(ηᵢ)` | Highest single-row efficiency across all valid records |
+| Total DC Energy | Trapezoidal integration over timestamps | Total DC energy input across the reporting period |
+| Total AC Energy | Trapezoidal integration over timestamps | Total AC energy output across the reporting period |
+| Calculated AC Yield | Sum of AC energy per inverter | Total AC energy delivered per device over the upload period |
+
+ 
+**Note on standard deviation:** A high σ indicates inconsistent conversion performance rather than a uniformly degraded device. This is often the first statistical signal of intermittent string faults, loose DC connections, or an inverter cycling in and out of a thermally derated state.
+ 
+### 8.7 Energy Calculation Method
+ 
+Energy is derived from power readings by numerical integration using the **trapezoidal method**:
+ 
+```
+Eᵢ = (Pᵢ + Pᵢ₊₁) / 2 × Δt
+```
+
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `Pᵢ` | Power reading at timestamp i | W or kW |
+| `Pᵢ₊₁` | Power reading at the next consecutive timestamp | W or kW |
+| `Δt` | Time interval between the two timestamps | hours |
+| `Eᵢ` | Energy for this interval | Wh or kWh |
+ 
+Rows are sorted chronologically by timestamp before integration. The time interval `Δt` is calculated from the actual difference between consecutive timestamps — it is not assumed to be a fixed interval.
+ 
+**Critical dependency:** Energy accuracy depends entirely on consistent, evenly spaced timestamps in the source file. Logger downtime, missed readings, or irregular sampling intervals will understate true energy throughput for the affected period, because no interval can be credited for a gap that was never recorded. If your SCADA system has known downtime periods, treat the energy totals as a lower bound, not an exact figure.
+ 
+### 8.8 Plant-Wide Summary Metrics
+ 
+In addition to per-inverter statistics, the dashboard computes the following plant-level summary metrics across all valid records regardless of inverter:
+ 
+| Metric | Description |
+|--------|-------------|
+| Total Rows | All rows in the uploaded file (including invalid and empty) |
+| Valid Rows | Rows that passed all validation rules and contributed to statistics |
+| Invalid Rows | Rows excluded from calculations with specific flag reasons |
+| Plant Average Efficiency | Arithmetic mean of η across all valid records from all inverters |
+| Best Inverter | Inverter with the highest average efficiency across its valid records |
+| Worst Inverter | Inverter with the lowest average efficiency across its valid records |
+| Peak Efficiency (single row) | Highest η value from any single valid row in the dataset |
+| Trough Efficiency (single row) | Lowest η value from any single valid row in the dataset |
+ 
+### 8.9 Diagnostic Charts
+ 
+| Chart | X-axis | Y-axis | Purpose |
+|-------|--------|--------|---------|
+| Efficiency Time Series | Timestamp | η (%) per inverter | Identifies trends, dips, and anomalies over time |
+| Average Efficiency by Device | Inverter ID | Mean η (%) | Fleet comparison — flags underperforming devices |
+| DC vs AC Power Scatter | DC Power | AC Power | Correlation plot — deviations from linearity indicate non-standard behaviour |
+| Efficiency Frequency Distribution | η (%) bands | Row count | Shows operating efficiency range and concentration |
+| Data Integrity Breakdown | — | Valid / Warning / Invalid counts | Assesses data quality before interpreting statistics |
+ 
+### 8.10 Interpreting Efficiency Results
+ 
+| Observed Range | Interpretation |
+|---------------|----------------|
+| 96%–99% near rated load | Normal for healthy modern string and central inverters operating near rated capacity, consistent with published CEC-weighted efficiency figures |
+| Below 96% at full-sun, mid-day conditions | Worth investigating — possible causes include thermal derating, MPPT tracking issues, a faulted string, or a partially failed power module |
+| Below 80% at rated load | Significant fault condition — verify data quality first, then investigate hardware |
+| Below 50% | Almost certainly a data problem (unit mismatch or sensor error) before a hardware fault |
+| Low efficiency at low DC input (morning/evening) | Normal — fixed internal losses (switching, cooling, control) are a larger fraction of a smaller power flow. Not an indicator of fault |
+ 
+### 8.11 Relationship to Other Calculators
+ 
+Inverter efficiency and Performance Ratio answer different questions and should not be used interchangeably:
+ 
+| Metric | Boundary | Inputs Required | Best Used For |
+|--------|----------|-----------------|---------------|
+| Inverter Efficiency (this tool) | Inverter terminals only | DC power, AC power | Inverter fleet health, conversion diagnostics |
+| [Capacity-Based PR](#6-capacity-based-performance-ratio-pr) | Whole plant | AC energy, DC capacity, POA irradiance | Contractual performance reporting |
+| [Efficiency-Based PR](#7-efficiency-based-performance-ratio-pr) | Whole plant | AC energy, POA insolation, module area, module efficiency | Design validation, technical due diligence |
+| [Instantaneous PR](https://kindastuff.com/instantaneous-pr/) | Whole plant, real-time | AC power, DC capacity, irradiance | Live SCADA diagnostics |
+| [Temperature-Corrected PR](https://kindastuff.com/temperature-corrected-pr/) | Whole plant | AC energy, DC capacity, insolation, average module temperature, module temperature coefficient of power | Isolating thermal losses from system faults |
+ 
+If a drop in inverter efficiency correlates with dusty conditions, cross-check against [Soiling Analysis](https://kindastuff.com/soiling-analysis/) before concluding the inverter is at fault — heavy soiling reduces DC input to the inverter without being an inverter fault.
+ 
+### 8.12 Limitations
+ 
+- This dashboard calculates DC-to-AC conversion efficiency only. It does not compute a standardised Performance Ratio, because POA irradiance and DC nameplate capacity are not part of the input template.
+- Energy totals assume timestamps represent actual measurement times. Irregular logging intervals produce inaccurate energy integration. Logger downtime gaps are not detectable from the data and will silently understate energy.
+- The 5 MB, 1,000-row, and 5-inverter limits are browser processing constraints. For larger fleets or longer date ranges, split exports by date range or inverter group.
+- The calculator does not perform automatic unit detection between W and kW. Unit mismatches between DC and AC power columns must be corrected in the source file before upload.
+- Results reflect the accuracy of the source instrumentation. CT calibration errors, meter drift, and clock misalignment between DC and AC measurement points propagate directly into the calculated efficiency values.
+---
+
+## 9. Variable Reference Table
 
 | Symbol | Full Name | Unit | IEC 61724-1 Reference |
-|---|---|---|---|
+|--------|-----------|------|-----------------------|
 | `E_AC` | Net AC energy output | kWh | Section 4.3 |
 | `P_ref` | Plant capacity reference (DC or AC) | kWp or kW | Section 3 (P_o) — extended for AC |
+| `P_DC` | DC nameplate capacity at STC | kWp | Section 3 (P_o) |
 | `T` | Total time in analysis period | hours | — |
 | `N` | Number of days in analysis period | days | — |
 | `H_POA` | Plane-of-array insolation | kWh/m² | Section 4.1 (H_i) |
-| `G_STC` | Irradiance at STC | kW/m² | 1 kW/m² (fixed constant) |
+| `G_POA` | Plane-of-array irradiance (instantaneous) | W/m² | Section 4.1 (G_i) |
+| `G_STC` | Irradiance at STC | kW/m² or W/m² | 1 kW/m² = 1000 W/m² (fixed constant) |
 | `Y_f` | Final Yield / Specific Yield | kWh/kWp | Section 7.3 |
 | `Y_r` | Reference Yield | hours | Section 7.1 |
-| `PR` | Performance Ratio | dimensionless | Section 7.5 |
+| `PR` | Performance Ratio (capacity-based) | dimensionless | Section 7.5 |
+| `PR_tc` | Temperature-Corrected Performance Ratio | dimensionless | Annex B |
+| `PR_raw` | Uncorrected base Performance Ratio | dimensionless | Section 7.5 |
+| `γ` | Module power temperature coefficient | %/°C | — (module datasheet) |
+| `T_module` | Average module surface temperature | °C | — |
+| `T_STC` | Reference temperature at STC | °C | 25°C (fixed constant) |
+| `A_total` | Total active module area | m² | — |
+| `η_module` | Rated module conversion efficiency | % | — (module datasheet) |
+| `SR` | Soiling Ratio | dimensionless | — |
 | `D1` | First-year module degradation rate | % | — (datasheet) |
-| `Da` | Annual module degradation rate | % | — (datasheet / IEC 61215) |
+| `Da` | Annual module degradation rate (year 2 onwards) | % | — (datasheet / IEC 61215) |
 | `n` | Years since commissioning | years | — |
 | `SF` | Insolation Scaling Factor | dimensionless | — |
 | `PTI` | Performance Target Index | dimensionless | Not an IEC metric |
 | `PR_expected` | Anticipated Performance Ratio | % | Not in IEC (custom metric) |
-
+| `P_AC` | Measured AC power output (instantaneous) | kW | — |
+| `η` | DC-to-AC inverter conversion efficiency | % | IEC 61683 |
+| `σ` | Population standard deviation of efficiency values | % | — |
+| `Δt` | Time interval between consecutive timestamps | hours | — |
+| `Eᵢ` | Energy for a single integration interval (trapezoidal method) | Wh or kWh | — |
+ 
 ---
 
-## 9. Standards Referenced
+## 10. Standards Referenced
 
 | Standard | Title | Relevance |
-|---|---|---|
-| **IEC 61724-1:2021** | Photovoltaic system performance — Part 1: Monitoring | Primary reference for all yield and PR metrics |
-| **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for long-term degradation characterisation |
+|----------|-------|-----------|
+| **IEC 61724-1:2021** | Photovoltaic system performance — Part 1: Monitoring | Primary reference for all yield, PR, and loss metrics |
 | **IEC 61724-2:2016** | Photovoltaic system performance — Part 2: Capacity evaluation method | Capacity-based performance ratio methodology |
 | **IEC 61724-3:2016** | Photovoltaic system performance — Part 3: Energy evaluation method | Energy-based performance evaluation |
-> **Important note on IEC 61724-1:2021 application:**  
-> This standard defines `P_o` as DC nameplate capacity. This calculator extends the standard's methodology to accept AC capacity inputs where required by specific PPAs (e.g., SECI, CERC regulations). The formula structure and mathematical logic remain identical to IEC 61724-1; only the capacity reference variable is adjusted to match contractual requirements.
-
+| **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for long-term degradation characterisation |
+| **IEC 61683:1999** | Photovoltaic systems — Power conditioners — Procedure for measuring efficiency | Inverter efficiency measurement principle; basis for CEC-weighted and Euro-eta efficiency definitions |
+ 
+> **Important note on IEC 61724-1:2021 application:**
+> This standard defines `P_o` as DC nameplate capacity. Where calculators on this site accept AC capacity inputs (CUF/PLF calculator), this extension is documented explicitly in the relevant section. The formula structure and mathematical logic remain consistent with IEC 61724-1; only the capacity reference variable is adjusted to match contractual requirements.
+ 
 ### Additional References
-
+ 
 - Jordan, D.C. & Kurtz, S.R. (2013). *Photovoltaic Degradation Rates — An Analytical Review*. Progress in Photovoltaics: Research and Applications, 21(1), 12–29. [DOI: 10.1002/pip.1182](https://doi.org/10.1002/pip.1182)
 - NREL. *Best Practices for Operation and Maintenance of Photovoltaic and Energy Storage Systems*, 3rd Edition (2019). [nrel.gov/docs/fy19osti/73822.pdf](https://www.nrel.gov/docs/fy19osti/73822.pdf)
 - Micheli, L. et al. (2021). *Photovoltaic soiling monitoring, losses, and efficiency*. Progress in Photovoltaics: Research and Applications. [DOI: 10.1002/pip.3441](https://doi.org/10.1002/pip.3441)
-
 ---
 
 ## Notes on Implementation
@@ -480,4 +655,4 @@ Same thresholds as Capacity-Based PR:
 
 *Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
 
-*Last updated: May 2026*
+*Last updated: July 2026*
