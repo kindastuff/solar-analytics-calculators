@@ -34,6 +34,7 @@ No sign-ups. No data uploads. All calculations run locally in your browser.
 | :-- | :-- |
 | [Soiling Analysis](https://kindastuff.com/soiling-analysis/) | Module conversion efficiency before and after cleaning events — supports up to 20 sample pairs |
 | [Solar Inverter Efficiency Dashboard](https://kindastuff.com/solar-inverter-efficiency-dashboard/) | DC-to-AC conversion efficiency per inverter from CSV/Excel uploads — batch analysis up to 5 inverters |
+| [Solar Panel Efficiency Calculator](https://kindastuff.com/solar-panel-efficiency-calculator/) | STC, operating, and temperature-corrected module efficiency — NOCT and Faiman cell temperature models, bifacial gain, SCADA CSV import for up to 10 modules |
 
  
 ### Availability & Loss Analytics
