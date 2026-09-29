@@ -114,7 +114,7 @@ IEC 61724-1:2021, **Section 4 (Measurement Parameters)** and **Section 7 (Perfor
 
 Module degradation rates are defined in product datasheets. Industry reference values for crystalline silicon modules:
 
-- First-year degradation: 2%–3% (due to light-induced degradation, LID)
+- Annual degradation: 0.4%–0.7% per year for crystalline silicon modules, applied uniformly across all years in this calculator
 - Subsequent annual degradation: 0.4%–0.7% per year (IEC 61215 long-term characterisation studies; NREL Photovoltaic Degradation Rates — Jordan & Kurtz, *Progress in Photovoltaics*, 2013)
 
 ### 2.3 Formula
@@ -153,7 +153,8 @@ CUF_corrected (%) = [ E_AC / (P_DC_corrected × SF × T) ] × 100
 
 ### 2.4 When This Matters
 
-Standard CUF becomes increasingly misleading from year 2 onwards. With a typical first-year degradation of 2–3% and subsequent annual rates of 0.4–0.7%, accumulated degradation exceeds 1.5% after the first operating year alone. Comparing current-year CUF against the original design-year CUF target without degradation correction will show apparent underperformance that is simply expected aging, not a real fault.
+Standard CUF becomes increasingly misleading as plants age. With a typical uniform annual degradation rate of 0.4–0.7% for crystalline 
+silicon modules, accumulated degradation reaches approximately 2–3.5% after five years of operation. Comparing current-year CUF against the original design-year CUF target without degradation correction will show apparent underperformance that is simply expected aging, not a real fault.
 
 ---
 
