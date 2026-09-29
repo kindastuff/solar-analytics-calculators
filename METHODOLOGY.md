@@ -34,7 +34,7 @@ CUF is a contractual and operational metric. It appears in Power Purchase Agreem
 
 IEC 61724-1:2021 defines the **Final Yield (Y_f)** as the normalised energy output per unit of installed power — the conceptual basis for CUF. Section 3 (Terms and Definitions) and Section 7 (Performance Indices) establish the normalisation framework on which CUF is built.
 
-> **IEC 61724-1:2021, Section 7.3 — Final Yield (Y_f)**
+> Per IEC 61724-1:2021, Section 7.3, Final Yield (Y_f) is defined as net AC energy output divided by rated array power at STC:
 > 
 > Y_f = E_AC / P_o
 > 
@@ -153,7 +153,7 @@ CUF_corrected (%) = [ E_AC / (P_DC_corrected × SF × T) ] × 100
 
 ### 2.4 When This Matters
 
-Standard CUF becomes increasingly misleading after year 3–4 of plant operation, when accumulated degradation exceeds ~1.5%. Comparing current-year CUF against the original design-year CUF target without degradation correction will show apparent underperformance that is simply expected aging, not a real fault.
+Standard CUF becomes increasingly misleading from year 2 onwards. With a typical first-year degradation of 2–3% and subsequent annual rates of 0.4–0.7%, accumulated degradation exceeds 1.5% after the first operating year alone. Comparing current-year CUF against the original design-year CUF target without degradation correction will show apparent underperformance that is simply expected aging, not a real fault.
 
 ---
 
@@ -167,6 +167,8 @@ Specific Yield (also called **Final Yield** in IEC 61724-1) is the net AC energy
 
 **IEC 61724-1:2021, Section 7.3 — Final Yield (Y_f)**
 
+> Per IEC 61724-1:2021, Section 7.3, Final Yield (Y_f) is defined as:
+>
 > Y_f = E_AC / P_o
 
 Where:
@@ -214,7 +216,7 @@ Reference Yield represents the solar energy available to the array per unit area
 
 ### 4.2 Standard Reference
 
-**IEC 61724-1:2021, Section 7.1 — Reference Yield (Y_r)**
+**Per IEC 61724-1:2021, Section 7.1, Reference Yield (Y_r) is defined as:**
 
 > Y_r = H_i / G_STC
 
@@ -300,7 +302,7 @@ The Capacity-Based Performance Ratio (PR) compares a solar plant's actual energy
 
 ### 6.2 Standard Reference
 
-**IEC 61724-1:2021, Section 7.5 — Performance Ratio (PR)**
+**Per IEC 61724-1:2021, Section 7.5, Performance Ratio (PR) is defined as:**
 
 > PR = Y_f / Y_r
 
@@ -344,7 +346,7 @@ PR (%) = [ E_AC / (P_DC × H_POA / G_STC) ] × 100
 
 - `G_STC` is fixed at **1 kW/m²** and is not user-adjustable. This is consistent with IEC 61724-1:2021, which defines G_STC as a fixed physical constant.
 - This calculator uses **DC nameplate capacity** as the normalisation reference, following IEC 61724-1. Using AC capacity instead would conflate inverter sizing decisions with module-level generation performance.
-- POA insolation must be measured at the same tilt and azimuth as the PV array. Using GHI instead of POA will produce systematically incorrect PR values — typically 5–15% lower depending on tilt and latitude.
+- POA insolation must be measured at the same tilt and azimuth as the PV array. Using GHI instead of POA introduces a systematic error — for most fixed-tilt arrays, POA exceeds GHI, so substituting GHI understates the reference yield and overstates calculated PR. The magnitude of this error depends on array tilt, latitude, and season.
 
 ### 6.6 Worked Example
 
@@ -894,7 +896,7 @@ P_expected = 400 × (700/1000) × [1 + (−0.34/100) × (50.1 − 25)]
 Module PR = (245 / 256.1) × 100 = 95.7%
 ```
  
-**Result: Module PR of 95.7% — within the normal 90–100% range. No fault indicated.**
+**Result: Module PR of 95.7% — within the Optimal band (≥ 95%). No fault indicated.**
  
 ### 9.11 STC Efficiency: Calculated vs. Manufacturer-Published
  
