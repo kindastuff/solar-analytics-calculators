@@ -2,7 +2,7 @@
  
 **Free, browser-based solar PV calculators for O&M engineers, asset managers, and EPC professionals.**
 
-No sign-ups. No data uploads. All calculations run locally in your browser.
+No sign-ups. No data uploads. Free to use, ad-supported. All calculations run locally in your browser.
  
 🌐 **[kindastuff.com](https://kindastuff.com/)**
 
