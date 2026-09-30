@@ -656,18 +656,22 @@ T_cell = T_amb + G_total × [ (NOCT - 20) / 800 ]
 | `NOCT` | Nominal Operating Cell Temperature from datasheet | °C | 45°C |
  
 **D. Cell Temperature Estimation — Faiman Model**
- 
-Wind-corrected cell temperature, consistent with PVsyst methodology:
- 
-```
+
+Wind-corrected cell temperature based on the Faiman (2008) model form:
+
 T_cell = T_amb + G_total / (U0 + U1 × WS)
-```
- 
+
 | Variable | Description | Unit | Value |
 |----------|-------------|------|-------|
-| `U0` | Heat loss coefficient (conductive/radiative) | W/m²K | 29.0 (fixed) |
-| `U1` | Heat loss coefficient (convective/wind) | W/m²K/(m/s) | 6.9 (fixed) |
+| `U0` | Constant heat transfer coefficient | W/m²K | 29.0 |
+| `U1` | Convective heat transfer coefficient | W/m²K/(m/s) | 6.9 |
 | `WS` | Wind speed | m/s | User input |
+
+**On U0 and U1 values:** The model form follows Faiman (2008). The default parameter values used in this implementation (U0 = 29.0, 
+U1 = 6.9) are consistent with pvlib's open-rack glass-polymer module defaults (Holmgren et al., pvlib python). Faiman's original 2008 paper reported combined fits of U0 = 25 W/m²K and U1 = 6.84 W/m²sK across seven module types with glass/Tedlar construction. Users with site-specific U-value measurements may obtain more accurate results by using the back-of-module RTD input instead.
+
+**Reference:** Faiman, D. (2008). Assessing the outdoor operating temperature of photovoltaic modules. Progress in Photovoltaics, 16(4), 
+307–315.
  
 **E. Cell Temperature from Back-of-Module RTD**
  
