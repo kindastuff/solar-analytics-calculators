@@ -107,7 +107,7 @@ Calculation errors are treated as high priority. If you believe a formula deviat
  
 This repository documents the methodology behind the calculators at kindastuff.com. The website source code is not open-source.
  
-Repository content is available under the **MIT License**.
+Repository content is © Aman Yadav. Published for transparency and peer review — see [LICENSE](LICENSE) for reuse terms.
  
 ---
  
