@@ -79,6 +79,7 @@ Most solar software requires account creation and server-side data processing. K
 - No plant data, energy figures, or inputs are transmitted to any server
 - No database storage of any kind
 - Google Analytics is used for basic traffic measurement only — no input data is captured
+- The site is supported by Google AdSense; ads are served independently and never see your calculator inputs or results
 This matters for O&M teams and asset managers working with commercially sensitive generation data.
  
 ---
