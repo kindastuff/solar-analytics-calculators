@@ -971,8 +971,8 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 | `T_amb` | Ambient air temperature | °C | — |
 | `T_mod` | Measured back-of-module temperature | °C | — |
 | `NOCT` | Nominal Operating Cell Temperature | °C | IEC 61215-1 |
-| `U0` | Faiman model conductive/radiative heat loss coefficient | W/m²K | 29.0 (fixed) |
-| `U1` | Faiman model convective heat loss coefficient | W/m²K/(m/s) | 6.9 (fixed) |
+| `U0` | Faiman model constant heat transfer coefficient | W/m²K | 29.0 (pvlib open-rack default) |
+| `U1` | Faiman model convective heat transfer coefficient | W/m²K/(m/s) | 6.9 (pvlib open-rack default) |
 | `WS` | Wind speed | m/s | — |
 | `G_front` | Front-side plane-of-array irradiance | W/m² | — |
 | `G_rear` | Rear ground-reflected irradiance (bifacial) | W/m² | — |
@@ -1004,6 +1004,7 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
  
 - Jordan, D.C. & Kurtz, S.R. (2013). *Photovoltaic Degradation Rates — An Analytical Review*. Progress in Photovoltaics: Research and Applications, 21(1), 12–29. [DOI: 10.1002/pip.1182](https://doi.org/10.1002/pip.1182)
 - NREL. *Best Practices for Operation and Maintenance of Photovoltaic and Energy Storage Systems*, 3rd Edition (2019). [nrel.gov/docs/fy19osti/73822.pdf](https://www.nrel.gov/docs/fy19osti/73822.pdf)
+- - Faiman, D. (2008). Assessing the outdoor operating temperature of photovoltaic modules. *Progress in Photovoltaics: Research and Applications*, 16(4), 307–315. [DOI: 10.1002/pip.780](https://doi.org/10.1002/pip.780)
 - Micheli, L. et al. (2021). *Photovoltaic soiling monitoring, losses, and efficiency*. Progress in Photovoltaics: Research and Applications. [DOI: 10.1002/pip.3441](https://doi.org/10.1002/pip.3441)
 ---
 
@@ -1019,4 +1020,4 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 
 *Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
 
-*Last updated: August 2026*
+*Last updated: September 2026*
