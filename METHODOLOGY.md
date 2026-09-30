@@ -442,9 +442,16 @@ This tool isolates the inverter conversion stage only. It does not calculate Per
 
 ### 8.2 Standard Reference
  
-**IEC 61683:1999 — Photovoltaic systems — Power conditioners — Procedure for measuring efficiency**
+**IEC 61683:1999 defines the efficiency measurement procedure for PV inverters under controlled laboratory conditions.**
  
-IEC 61683 defines the efficiency measurement procedure for PV inverters, including the CEC-weighted and European-weighted (Euro-eta) efficiency methods used in inverter datasheets. Both are laboratory-derived figures that weight inverter performance across standardised load points (10%, 20%, 30%, 50%, 75%, and 100% of rated power).
+Inverter datasheets commonly quote two weighted efficiency figures derived from standardised test protocols:
+
+- **European Weighted Efficiency (Euro-eta):** Weights inverter performance across load points calibrated to a Central European 
+irradiance profile. The Sungrow SG3125HV-30/SG3400HV-30 datasheet, for example, quotes a European efficiency of 98.7% alongside a maximum efficiency of 99.0%.
+
+- **CEC Weighted Efficiency:** A protocol developed by the California Energy Commission and Sandia National Laboratories, calibrated to a typical California irradiance profile. This is a separate protocol from IEC 61683 and is not quoted on all international inverter datasheets.
+
+Both figures are laboratory-derived and intended for comparing inverter models under standardised conditions. This dashboard reports actual field conversion efficiency from measured DC and AC power readings, which is complementary to — but distinct from — either weighted figure.
 
 This dashboard operates on the same conversion-efficiency principle but applied to field-recorded operating data rather than controlled laboratory test points. The result is actual observed conversion efficiency under real installation conditions — not a standardised weighted figure. The two are complementary: datasheet efficiency characterises the device under ideal conditions; field efficiency characterises what the device is actually delivering in operation.
  
