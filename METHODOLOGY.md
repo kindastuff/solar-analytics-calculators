@@ -471,12 +471,10 @@ PR_instantaneous (%) = [ P_AC / (P_DC × G_POA / G_STC) ] × 100
 | Input | Description | Unit | Validation |
 |-------|-------------|------|------------|
 | AC Power | Measured AC power output at the measurement instant | kW | ≥ 0.01 (HTML minimum); negatives rejected by JS |
-| Plant DC Capacity | Total nameplate DC capacity of installed PV modules at STC | kWp | > 0; AC Power cannot exceed this value |
+| Plant DC Capacity | Total nameplate DC capacity of installed PV modules at STC | kWp | ≥ 0.01 (HTML minimum); negatives rejected by JS|
 | Irradiance | Measured plane-of-array irradiance at the measurement instant | W/m² | ≥ 200 (hard block) and ≤ 1361 (hard block) |
 | Irradiance @ STC | Standard test condition irradiance reference | W/m² | Fixed at 1000 — validated by JS, not user-adjustable |
- 
-**Note on DC Capacity labelling:** The input label on the calculator page reads "Plant DC Capacity (kW)". The correct unit is **kWp** (kilowatt-peak, at STC). This is a labelling inconsistency in the current interface; the calculation uses the value as kWp.
- 
+  
 **On the 200 W/m² irradiance floor:** Inputs below 200 W/m² are rejected with the message "Irradiance too low for accurate PR calculation (< 200 W/m²)". This is a hard block — the form does not submit. At irradiance levels below approximately 200 W/m², inverter efficiency characteristics become non-linear, and signal-to-noise ratios in both the power meter and irradiance sensor degrade to the point where the calculated PR is not meaningful for diagnostic purposes.
  
 **On the 1361 W/m² irradiance ceiling:** 1361 W/m² is the solar constant — the total solar irradiance at the top of Earth's atmosphere. POA irradiance at ground level cannot physically exceed this value. Inputs above this threshold are rejected with the explicit message "Irradiance exceeds 1361 W/m²."
