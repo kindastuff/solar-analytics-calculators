@@ -15,10 +15,17 @@ The website source code is not open-source. The calculation logic, however, is b
 5. [Performance Target Index (PTI)](#5-performance-target-index-pti)
 6. [Capacity-Based Performance Ratio (PR)](#6-capacity-based-performance-ratio-pr)
 7. [Efficiency-Based Performance Ratio (PR)](#7-efficiency-based-performance-ratio-pr)
-8. [Solar Inverter Efficiency Dashboard](#8-solar-inverter-efficiency-dashboard)
-9. [Solar Panel Efficiency Calculator](#9-solar-panel-efficiency-calculator)
-10. [Variable Reference Table](#10-variable-reference-table)
-11. [Standards Referenced](#11-standards-referenced)
+8. [Instantaneous Performance Ratio (PR)](#8-instantaneous-performance-ratio-pr)
+9. [Temperature-Corrected Performance Ratio (PR)](#9-temperature-corrected-performance-ratio-pr)
+10. [Soiling Analysis](#10-soiling-analysis)
+11. [Solar Inverter Efficiency Dashboard](#11-solar-inverter-efficiency-dashboard)
+12. [Solar Panel Efficiency Calculator](#12-solar-panel-efficiency-calculator)
+13. [Plant & Grid Generation Loss](#13-plant--grid-generation-loss) *(documentation in progress)*
+14. [Plant & Grid Availability](#14-plant--grid-availability) *(documentation in progress)*
+15. [NMGG Calculator](#15-nmgg-calculator) *(documentation in progress)*
+16. [Solar Insolation — POA Back-Calculator](#16-solar-insolation--poa-back-calculator) *(documentation in progress)*
+17. [Variable Reference Table](#17-variable-reference-table)
+18. [Standards Referenced](#18-standards-referenced)
 
 ---
 
@@ -432,15 +439,270 @@ Same thresholds as Capacity-Based PR:
 - Total Active Module Area must accurately represent the generating surface only. Including non-active area (frame borders, spacing) will inflate the area input and suppress the PR result.
 ---
 
-## 8. Solar Inverter Efficiency Dashboard
+## 8. Instantaneous Performance Ratio (PR)
  
 ### 8.1 Definition
+ 
+Instantaneous Performance Ratio measures plant performance at a single point in time using real-time or near-real-time power output and irradiance readings. It provides a snapshot view of system performance suitable for SCADA-based monitoring, fault detection, and short-interval diagnostic analysis.
+ 
+### 8.2 Standard Reference
+ 
+Per IEC 61724-1:2021, Section 7.5, Performance Ratio applies at any time resolution. The instantaneous form uses power (kW) and irradiance (W/m²) rather than energy (kWh) and insolation (kWh/m²), but the mathematical relationship is identical:
+ 
+```
+PR_instantaneous (%) = (P_AC / P_DC) × (G_STC / G_POA) × 100
+```
+ 
+Which is equivalent to:
+ 
+```
+PR_instantaneous (%) = [ P_AC / (P_DC × G_POA / G_STC) ] × 100
+```
+ 
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `P_AC` | Measured AC power output at the measurement instant | kW |
+| `P_DC` | Installed DC nameplate capacity at STC | kWp |
+| `G_POA` | Measured plane-of-array irradiance at the measurement instant | W/m² |
+| `G_STC` | Standard test condition irradiance = 1000 W/m² (fixed constant) | W/m² |
+ 
+### 8.3 Inputs
+ 
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| AC Power | Measured AC power output at the measurement instant | kW | ≥ 0.01 (HTML minimum); negatives rejected by JS |
+| Plant DC Capacity | Total nameplate DC capacity of installed PV modules at STC | kWp | > 0; AC Power cannot exceed this value |
+| Irradiance | Measured plane-of-array irradiance at the measurement instant | W/m² | ≥ 200 (hard block) and ≤ 1361 (hard block) |
+| Irradiance @ STC | Standard test condition irradiance reference | W/m² | Fixed at 1000 — validated by JS, not user-adjustable |
+ 
+**Note on DC Capacity labelling:** The input label on the calculator page reads "Plant DC Capacity (kW)". The correct unit is **kWp** (kilowatt-peak, at STC). This is a labelling inconsistency in the current interface; the calculation uses the value as kWp.
+ 
+**On the 200 W/m² irradiance floor:** Inputs below 200 W/m² are rejected with the message "Irradiance too low for accurate PR calculation (< 200 W/m²)". This is a hard block — the form does not submit. At irradiance levels below approximately 200 W/m², inverter efficiency characteristics become non-linear, and signal-to-noise ratios in both the power meter and irradiance sensor degrade to the point where the calculated PR is not meaningful for diagnostic purposes.
+ 
+**On the 1361 W/m² irradiance ceiling:** 1361 W/m² is the solar constant — the total solar irradiance at the top of Earth's atmosphere. POA irradiance at ground level cannot physically exceed this value. Inputs above this threshold are rejected with the explicit message "Irradiance exceeds 1361 W/m²."
+ 
+**On AC Power vs DC Capacity:** AC power output cannot exceed installed DC capacity in this calculator. If AC power entered exceeds DC capacity, the calculation is blocked with the message "AC power cannot exceed installed DC capacity in this calculator model." This prevents physically impossible inputs and distinguishes this calculator from plant-level tools that accept AC output independently of DC capacity.
+ 
+### 8.4 Output Flags
+ 
+| Result | Flag |
+|--------|------|
+| PR > 95% and ≤ 100% | ⚠️ "Suspiciously High PR" — verify input data quality |
+| PR > 100% | ❌ "Statistical Error" — result is physically impossible; check inputs |
+ 
+**Why 95% is the suspicion threshold:** Real-world instantaneous PR values above 95% are extremely rare under normal operating conditions. At the single time-point level, values in this range almost always indicate a data quality issue — sensor misalignment, timestamp offset between power and irradiance readings, or incorrect DC capacity entry.
+ 
+### 8.5 When to Use Instantaneous PR
+ 
+- Real-time SCADA dashboards where per-minute or per-15-minute performance needs to be flagged
+- Fault detection: a sudden drop in instantaneous PR relative to a recent baseline indicates an active fault
+- Commissioning verification: checking that a newly energised plant is performing at expected levels under current irradiance conditions
+  
+### 8.6 Limitations
+ 
+- Instantaneous PR is **highly volatile**. It should never be used as a plant-level performance KPI. Short-term cloud transients, inverter ramp delays, and sensor noise all produce large swings that are irrelevant to actual plant health.
+- This calculator enforces a hard minimum irradiance threshold of 200 W/m². Readings below this level are rejected. This differs from some SCADA systems that use 20 W/m² or 50 W/m² thresholds for data filtering — the 200 W/m² floor is a diagnostic quality requirement specific to single time-point PR calculation.
+- Time-alignment between the power reading and the irradiance reading is critical. Even a 1-minute offset between a SCADA timestamp and a sensor timestamp can produce a misleading instantaneous PR during rapidly changing irradiance conditions.
+- This calculator uses DC nameplate capacity as the reference, consistent with IEC 61724-1. For DC-oversized plants, inverter clipping at high irradiance will suppress instantaneous PR even when the plant is operating as designed.
+---
+
+## 9. Temperature-Corrected Performance Ratio (PR)
+ 
+### 9.1 Definition
+ 
+Temperature-Corrected Performance Ratio removes the effect of operating temperature on module output, allowing fair performance comparison across seasons and between periods with different thermal conditions. It answers the question: *what would the plant's PR have been if it had operated at standard test condition temperature (25°C)?*
+ 
+### 9.2 Standard Reference
+ 
+Per IEC 61724-1:2021, Annex B, temperature correction methodology for Performance Ratio uses the module power temperature coefficient (γ), which quantifies the fractional change in module output power per degree Celsius of deviation from STC temperature.
+ 
+The underlying principle is that all crystalline silicon modules lose output as temperature rises above 25°C. The temperature coefficient is specified in the module manufacturer's datasheet and is always a negative value (output decreases as temperature increases).
+ 
+**Step 1 — Base PR (identical to Capacity-Based PR):**
+ 
+```
+PR_raw = E_AC / (P_DC × H_POA / G_STC)
+```
+ 
+**Step 2 — Temperature correction factor:**
+ 
+```
+temperatureCorrection = 1 + (γ / 100) × (T_module − T_STC)
+```
+ 
+**Step 3 — Temperature-corrected PR:**
+ 
+```
+PR_tc = PR_raw / temperatureCorrection
+```
+ 
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `PR_raw` | Uncorrected base Performance Ratio | dimensionless |
+| `γ` | Module power temperature coefficient from datasheet | %/°C (negative value) |
+| `T_module` | Average measured module surface temperature over the reporting period | °C |
+| `T_STC` | Reference temperature at STC = 25°C (fixed, non-adjustable) | °C |
+| `PR_tc` | Temperature-corrected Performance Ratio | dimensionless |
+ 
+**Directional behaviour:**
+- When `T_module > T_STC` (operating above 25°C): the correction denominator is less than 1, so `PR_tc > PR_raw`. The corrected PR is higher than the raw PR, reflecting that some apparent loss was due to temperature, not system faults.
+- When `T_module ≈ T_STC`: correction is minimal. Corrected and raw PR converge.
+- When `T_module < T_STC` (cold conditions): `PR_tc < PR_raw`. The correction removes the temperature boost.
+**Denominator guard:** If the temperature correction factor reaches zero or goes negative (which would require an extreme combination of very high temperature and very large γ magnitude), the calculation is blocked with a validation error. This prevents a mathematically undefined or physically meaningless result.
+ 
+### 9.3 Inputs
+ 
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| Energy Generated | Net AC energy output during the period | kWh | ≥ 0.01 (HTML); ≥ 0 (JS) |
+| Plant DC Capacity | Total nameplate DC capacity at STC | kWp | > 0 |
+| Avg. Module Temperature | Average module surface temperature recorded over the reporting period | °C | > −40 and < 85 |
+| POA Insolation | Measured plane-of-array insolation during the same period | kWh/m² | > 0 |
+| Irradiance @ STC | Standard test condition irradiance reference | kW/m² | Fixed at 1 — not user-adjustable |
+| Avg. Cell Temp. at STC | Reference temperature | °C | Fixed at 25 — not user-adjustable |
+| Module Temp. Coefficient of Power (γ) | Power temperature coefficient from module datasheet | %/°C | −0.65 to −0.15 |
+ 
+**On the γ validation range:** −0.65 to −0.15 %/°C covers the full practical range of commercially available crystalline silicon modules. Standard monocrystalline modules typically show γ between −0.30 and −0.45 %/°C. Values outside this range are rejected as likely datasheet transcription errors.
+ 
+**On the module temperature range:** The calculator rejects values at or below −40°C and at or above 85°C. These bounds reflect the operating temperature limits of commercially available PV modules. Values outside this range indicate either a sensor fault or an input error.
+ 
+**On temperature input:** This calculator uses average module surface temperature over the reporting period, not ambient temperature. Module surface temperature is the physically correct input for this correction. Ambient temperature requires an additional model to estimate cell temperature, which introduces additional uncertainty.
+ 
+### 9.4 Output Flags
+ 
+The flags apply to the **temperature-corrected PR output** (PR_tc), not the intermediate base PR:
+ 
+| Result | Flag |
+|--------|------|
+| PR_tc ≥ 96% and ≤ 100% | ⚠️ "Suspicious PR" — verify input data quality |
+| PR_tc > 100% | ❌ "Statistical Error" — result is physically impossible; check inputs |
+ 
+### 9.5 Calculation Sequence
+ 
+1. Base PR is calculated from energy, DC capacity, and insolation — identical to Capacity-Based PR (Section 6)
+2. Temperature correction factor is computed from γ and the difference between average module temperature and 25°C
+3. The denominator is validated — if it reaches zero or below, calculation is blocked
+4. Base PR is divided by the correction factor to produce the temperature-corrected PR
+5. The corrected PR is evaluated against the output flag thresholds
+The correction is applied as a post-processing step. It does not alter the energy or irradiance inputs.
+ 
+### 9.6 Limitations
+ 
+- This calculator uses **average module temperature** over the reporting period. In practice, temperature-PR relationships are non-linear when integrated over a full day or month, because irradiance and temperature are correlated — high irradiance periods coincide with high temperature periods and contribute disproportionately to energy yield. For high-precision temperature correction, interval-level (15-minute or hourly) data should be used, with the correction applied at each interval before aggregation.
+- The linear temperature coefficient model assumes constant γ across all irradiance levels and temperatures. In reality, γ varies slightly with irradiance and temperature, but the linear approximation is standard practice per IEC 61724-1 Annex B and module datasheet specifications.
+- Using an incorrect γ value (e.g., from a different module model) will produce a systematically biased corrected PR. Always source γ from the specific module datasheet for the modules installed in the plant.
+- The temperature correction applied here removes the aggregate thermal effect across the reporting period. It does not isolate individual loss mechanisms such as elevated irradiance at high temperature, inverter thermal derating, or inter-row thermal gradients.
+---
+ 
+## 10. Soiling Analysis
+ 
+### 10.1 Definition
+ 
+The Soiling Analysis tool quantifies module conversion efficiency before and after cleaning events using paired power and irradiance measurements. By comparing pre-cleaning and post-cleaning efficiency for each cleaning sample, the tool reveals the efficiency penalty attributable to soiling at each measurement point and across the full set of samples.
+ 
+### 10.2 Methodology
+ 
+Soiling analysis using paired pre/post-cleaning measurements is an established field method for quantifying soiling loss independently of plant-level energy data. The method isolates soiling as the variable: all other conditions (irradiance, module area, installed capacity) are held constant between the pre-clean and post-clean measurements taken at the same time and location.
+ 
+This approach is consistent with the soiling measurement principles referenced in:
+- IEC 61724-1:2021, which identifies soiling as a system loss category affecting Y_f relative to Y_r
+- Micheli, L. et al. (2021). *Photovoltaic soiling monitoring, losses, and efficiency*. Progress in Photovoltaics. [DOI: 10.1002/pip.3441](https://doi.org/10.1002/pip.3441)
+  
+### 10.3 Soiling Ratio and Efficiency
+ 
+Soiling Ratio (SR) is defined in the literature as:
+ 
+```
+SR = P_soiled / P_clean
+```
+ 
+Where `P_soiled` and `P_clean` are irradiance-normalised power outputs (or efficiency values) measured under equivalent conditions before and after cleaning respectively.
+ 
+This calculator expresses soiling impact as **conversion efficiency** rather than raw power, normalising each measurement by the irradiance at the time of measurement and the total active module area. This irradiance-normalisation is essential because pre-clean and post-clean readings may be taken under slightly different irradiance conditions.
+ 
+### 10.4 Inputs
+ 
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| Plant Area | Total active surface area of all PV modules in the plant | m² | > 1 (HTML minimum); > 0 (JS) |
+| Module Efficiency | Rated module conversion efficiency from manufacturer datasheet | % | 10 – 40 |
+| Pre-Clean Power | AC or DC power output measured immediately before cleaning | kW | ≥ 0.3 per sample |
+| Pre-Clean Irradiance | POA irradiance measured at the time of pre-clean power reading | W/m² | ≥ 1 and ≤ 1367 |
+| Post-Clean Power | AC or DC power output measured immediately after cleaning | kW | ≥ 0.3 per sample |
+| Post-Clean Irradiance | POA irradiance measured at the time of post-clean power reading | W/m² | ≥ 1 and ≤ 1367 |
+ 
+**Number of samples:** Minimum 1, maximum 20 cleaning event pairs per analysis session.
+ 
+**On the 0.3 kW power minimum:** Readings below 0.3 kW are rejected (HTML minimum enforced). At very low power levels, the signal-to-noise ratio is insufficient to reliably distinguish soiling loss from measurement noise. This is especially important for pre-clean and post-clean readings taken at dawn or dusk.
+ 
+**On per-sample efficiency vs. Module Efficiency:** Each calculated sample efficiency is validated against the user-entered Module Efficiency. If a calculated pre-clean or post-clean efficiency exceeds the rated Module Efficiency, the sample is rejected with an error message indicating either an incorrect Plant Area input or incorrect power/irradiance values for that sample. This cross-validation prevents physically impossible results where a soiled or cleaned module appears to convert irradiance more efficiently than its rated nameplate performance.
+ 
+**On Plant Area vs. individual sample area:** Plant Area is used as the common normalisation reference for all samples. Ensure this value represents the total active module area of the section being analysed, not the full plant if only a portion is being assessed in a given cleaning campaign.
+ 
+### 10.5 Output
+ 
+The calculator produces:
+ 
+- **Overall Pre-Clean Efficiency (%):** Arithmetic mean of per-sample pre-clean efficiency values across all submitted samples
+- **Overall Post-Clean Efficiency (%):** Arithmetic mean of per-sample post-clean efficiency values across all submitted samples
+- **Per-Sample Bar Chart:** Side-by-side bar comparison of pre-clean and post-clean efficiency for each individual cleaning sample pair
+**Per-sample efficiency formula:**
+ 
+```
+η_sample (%) = (P × 1000) / (G × A) × 100
+```
+ 
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `P` | Measured power (pre-clean or post-clean) | kW |
+| `G` | Measured POA irradiance at time of reading | W/m² |
+| `A` | Total plant active module area | m² |
+ 
+The multiplication by 1000 converts power from kW to W so that units are consistent with irradiance (W/m²) and area (m²).
+ 
+**Overall efficiency aggregation:**
+ 
+```
+Overall Efficiency (%) = Σ η_sample / n
+```
+ 
+Where n is the number of valid sample pairs submitted. This is a simple arithmetic mean — it is not weighted by irradiance or power level.
+ 
+The soiling loss for any sample or the overall dataset can be derived directly from the efficiency values:
+ 
+```
+Soiling Loss (percentage points) = Post-Clean Efficiency − Pre-Clean Efficiency
+```
+ 
+A soiling loss of 0.18 percentage points means the modules were converting 0.18% less of available irradiance before cleaning than after. The calculator does not output this difference explicitly — the user derives it from the two reported efficiency figures.
+ 
+### 10.6 Data Collection Requirements
+ 
+For reliable results, the following field practices are recommended:
+ 
+- Pre-clean and post-clean readings should be taken as close together in time as possible to minimise irradiance variation between measurements
+- Measurements should be taken at irradiance levels above 400 W/m² to ensure stable inverter and module operating conditions
+- Avoid measurements taken during cloud transients, as rapidly changing irradiance will distort both the power reading and the efficiency calculation
+- Use the same measurement instrument and connection points for pre and post readings within each sample pair
+- Record actual POA irradiance at the time of each measurement — do not use modelled or estimated irradiance values for soiling analysis
+  
+### 10.7 Limitations
+ 
+- This method measures soiling at the time of the cleaning event. It does not produce a continuous soiling rate or a time-series of soiling accumulation between cleaning cycles.
+- The calculator uses total plant area as the normalisation reference. If different sections of the plant have different module types or degradation levels, the aggregate efficiency values may mask spatial variation in soiling.
+- Pre-clean and post-clean measurements are taken under different irradiance conditions if any time elapses between readings. The irradiance normalisation in the calculator mitigates this, but it does not fully eliminate the effect of temperature differences between the two readings.
+- The analysis does not account for partial cleaning — samples where only a portion of the module surface was cleaned will show attenuated post-clean efficiency improvement and understate actual soiling loss.
+---
+ 
+ ## 11. Solar Inverter Efficiency Dashboard
+ 
+### 11.1 Definition
 
 The Solar Inverter Efficiency Dashboard quantifies the DC-to-AC conversion efficiency of individual inverters from time-stamped field data uploaded as a CSV or Excel file. It applies the efficiency formula to every valid row in the dataset and aggregates results per inverter, producing statistical summaries, diagnostic charts, and a filterable record-level explorer entirely within the user's browser.
 
 This tool isolates the inverter conversion stage only. It does not calculate Performance Ratio, which requires irradiance and capacity inputs and captures losses across the full system. For whole-plant performance analysis, see the [Capacity-Based PR](#6-capacity-based-performance-ratio-pr) or [Efficiency-Based PR](#7-efficiency-based-performance-ratio-pr) sections.
 
-### 8.2 Standard Reference
+### 11.2 Standard Reference
  
 **IEC 61683:1999 defines the efficiency measurement procedure for PV inverters under controlled laboratory conditions.**
  
@@ -455,7 +717,7 @@ Both figures are laboratory-derived and intended for comparing inverter models u
 
 This dashboard operates on the same conversion-efficiency principle but applied to field-recorded operating data rather than controlled laboratory test points. The result is actual observed conversion efficiency under real installation conditions — not a standardised weighted figure. The two are complementary: datasheet efficiency characterises the device under ideal conditions; field efficiency characterises what the device is actually delivering in operation.
  
-### 8.3 Core Formula
+### 11.3 Core Formula
  
 ```
 η (%) = (P_AC / P_DC) × 100
@@ -469,7 +731,7 @@ This dashboard operates on the same conversion-efficiency principle but applied 
 
 **Unit requirement:** `P_AC` and `P_DC` must be in the same unit within the uploaded file. The calculator does not perform automatic unit conversion between W and kW. A unit mismatch between the two columns is the most common source of physically impossible results (η >> 100% or η << 1%).
 
-### 8.4 Input File Requirements
+### 11.4 Input File Requirements
  
 | Column | Description | Required |
 |--------|-------------|----------|
@@ -487,7 +749,7 @@ This dashboard operates on the same conversion-efficiency principle but applied 
 - Maximum unique inverter identifiers: 5 per upload
 If any of the file constraints are exceeded, processing is aborted and the user is notified. The 5-inverter and 1,000-row limits reflect browser-side processing capacity, not engineering limitations — for larger datasets, split by date range or inverter group and analyse each batch separately.
 
-### 8.5 Row Validation Rules
+### 11.5 Row Validation Rules
  
 Every row is evaluated against the following rules before being included in calculations:
  
@@ -504,7 +766,7 @@ Every row is evaluated against the following rules before being included in calc
  
 **Valid rows** are those where both power values are finite, positive, `DC Power` > 0, and the resulting η falls within 0%–100% inclusive.
 
-### 8.6 Statistical Outputs Per Inverter
+### 11.6 Statistical Outputs Per Inverter
  
 For each inverter, the following statistics are computed from all valid rows attributed to that device:
  
@@ -522,7 +784,7 @@ For each inverter, the following statistics are computed from all valid rows att
  
 **Note on standard deviation:** A high σ indicates inconsistent conversion performance rather than a uniformly degraded device. This is often the first statistical signal of intermittent string faults, loose DC connections, or an inverter cycling in and out of a thermally derated state.
  
-### 8.7 Energy Calculation Method
+### 11.7 Energy Calculation Method
  
 Energy is derived from power readings by numerical integration using the **trapezoidal method**:
  
@@ -541,7 +803,7 @@ Rows are sorted chronologically by timestamp before integration. The time interv
  
 **Critical dependency:** Energy accuracy depends entirely on consistent, evenly spaced timestamps in the source file. Logger downtime, missed readings, or irregular sampling intervals will understate true energy throughput for the affected period, because no interval can be credited for a gap that was never recorded. If your SCADA system has known downtime periods, treat the energy totals as a lower bound, not an exact figure.
  
-### 8.8 Plant-Wide Summary Metrics
+### 11.8 Plant-Wide Summary Metrics
  
 In addition to per-inverter statistics, the dashboard computes the following plant-level summary metrics across all valid records regardless of inverter:
  
@@ -556,7 +818,7 @@ In addition to per-inverter statistics, the dashboard computes the following pla
 | Peak Efficiency (single row) | Highest η value from any single valid row in the dataset |
 | Trough Efficiency (single row) | Lowest η value from any single valid row in the dataset |
  
-### 8.9 Diagnostic Charts
+### 11.9 Diagnostic Charts
  
 | Chart | X-axis | Y-axis | Purpose |
 |-------|--------|--------|---------|
@@ -566,7 +828,7 @@ In addition to per-inverter statistics, the dashboard computes the following pla
 | Efficiency Frequency Distribution | η (%) bands | Row count | Shows operating efficiency range and concentration |
 | Data Integrity Breakdown | — | Valid / Warning / Invalid counts | Assesses data quality before interpreting statistics |
  
-### 8.10 Interpreting Efficiency Results
+### 11.10 Interpreting Efficiency Results
  
 | Observed Range | Interpretation |
 |---------------|----------------|
@@ -576,7 +838,7 @@ In addition to per-inverter statistics, the dashboard computes the following pla
 | Below 50% | Almost certainly a data problem (unit mismatch or sensor error) before a hardware fault |
 | Low efficiency at low DC input (morning/evening) | Normal — fixed internal losses (switching, cooling, control) are a larger fraction of a smaller power flow. Not an indicator of fault |
  
-### 8.11 Relationship to Other Calculators
+### 11.11 Relationship to Other Calculators
  
 Inverter efficiency and Performance Ratio answer different questions and should not be used interchangeably:
  
@@ -590,7 +852,7 @@ Inverter efficiency and Performance Ratio answer different questions and should 
  
 If a drop in inverter efficiency correlates with dusty conditions, cross-check against [Soiling Analysis](https://kindastuff.com/soiling-analysis/) before concluding the inverter is at fault — heavy soiling reduces DC input to the inverter without being an inverter fault.
  
-### 8.12 Limitations
+### 11.12 Limitations
  
 - This dashboard calculates DC-to-AC conversion efficiency only. It does not compute a standardised Performance Ratio, because POA irradiance and DC nameplate capacity are not part of the input template.
 - Energy totals assume timestamps represent actual measurement times. Irregular logging intervals produce inaccurate energy integration. Logger downtime gaps are not detectable from the data and will silently understate energy.
@@ -599,15 +861,15 @@ If a drop in inverter efficiency correlates with dusty conditions, cross-check a
 - Results reflect the accuracy of the source instrumentation. CT calibration errors, meter drift, and clock misalignment between DC and AC measurement points propagate directly into the calculated efficiency values.
 ---
 
-## 9. Solar Panel Efficiency Calculator
+## 12. Solar Panel Efficiency Calculator
  
-### 9.1 Definition
+### 12.1 Definition
  
 The Solar Panel Efficiency Calculator computes STC efficiency, operating efficiency, temperature-corrected efficiency, expected output, and Module Performance Ratio (Module PR) for individual PV modules. It operates in three modes: manual single-module calculation, side-by-side comparison of up to 10 modules, and time-series SCADA CSV import for batch diagnostic analysis. All calculations execute client-side in the browser — no module or plant data is transmitted anywhere.
  
 This calculator operates at **module level**, not plant level. It isolates individual module performance from a measured DC power output and irradiance reading. It does not calculate plant-level Performance Ratio (which requires AC energy output, total DC capacity, and POA insolation integrated over a period) — for those, see [Capacity-Based PR](#6-capacity-based-performance-ratio-pr) or [Efficiency-Based PR](#7-efficiency-based-performance-ratio-pr).
  
-### 9.2 Standard References
+### 12.2 Standard References
  
 | Standard | Application in this calculator |
 |----------|-------------------------------|
@@ -617,7 +879,8 @@ This calculator operates at **module level**, not plant level. It isolates indiv
 **Cell temperature models:**
 - **NOCT model:** Standard definition — cell temperature reached at 800 W/m² irradiance, 20°C ambient, 1 m/s wind, open-rack mounting. Standard reference: [IEC 61215-1:2021](https://webstore.iec.ch/en/publication/61345)
 - **Faiman model:** Wind-corrected thermal model documented by Sandia National Laboratories' PV Performance Modeling Collaborative, used in PVsyst. Reference: [pvpmc.sandia.gov](https://pvpmc.sandia.gov/modeling-guide/2-dc-module-iv/module-temperature/faiman-module-temperature-model/)
-### 9.3 Formulas
+  
+### 12.3 Formulas
  
 All formulas below are implemented in the `SPEMath` class. They are derived from standard photovoltaic engineering principles and are reproduced here in full for transparency.
  
@@ -764,7 +1027,7 @@ This is a module-level health index — the ratio of actual measured output to e
 | 85% – 95% | Acceptable — minor losses from soiling, cabling, or aging |
 | < 85% | Alert — investigate for soiling, shading, diode damage, or PID |
  
-### 9.4 Input Validation Rules
+### 12.4 Input Validation Rules
  
 #### Manual Calculator
  
@@ -801,7 +1064,7 @@ This is a module-level health index — the ratio of actual measured output to e
  
 **Column name matching:** Case-insensitive regex pattern matching. Accepted variations include `DC_Power`, `DCPower`, `dc power`, `p_dc`, `irradiance`, `irr`, `poa`, `g_`, `module_temp`, `t_mod`, `ambient`, `t_amb`, and others.
  
-### 9.5 Nighttime Filtering
+### 12.5 Nighttime Filtering
  
 SCADA records where irradiance is below **50 W/m²** are excluded from efficiency averages and statistical calculations. This threshold is applied because:
  
@@ -810,7 +1073,7 @@ SCADA records where irradiance is below **50 W/m²** are excluded from efficienc
 - Dividing near-zero measured power by near-zero irradiance amplifies measurement noise into meaningless efficiency values
 Excluded rows are counted in total row tallies but not in valid-record statistics. This is consistent with common SCADA data processing practice for PV performance analysis.
  
-### 9.6 SCADA Mode Statistical Outputs Per Module
+### 12.6 SCADA Mode Statistical Outputs Per Module
  
 For each unique panel identifier in the uploaded CSV, the following statistics are computed from all valid (irradiance ≥ 50 W/m²) records:
  
@@ -825,7 +1088,7 @@ For each unique panel identifier in the uploaded CSV, the following statistics a
  
 **Note on standard deviation in SCADA mode:** A high σ across a day's readings for a single module suggests inconsistent performance — possible causes include partial shading at certain times of day, soiling concentrated on part of the module surface, or intermittent string-level issues. A low σ with low average efficiency suggests a consistent, uniform loss (soiling, degradation, or persistent shading).
  
-### 9.7 File Constraints
+### 12.7 File Constraints
  
 | Constraint | Value | Reason |
 |------------|-------|--------|
@@ -835,7 +1098,7 @@ For each unique panel identifier in the uploaded CSV, the following statistics a
  
 For larger datasets or longer date ranges, split the export by date range or panel group and analyse each batch separately.
  
-### 9.8 Typical STC Efficiency Ranges by Technology
+### 12.8 Typical STC Efficiency Ranges by Technology
  
 These ranges are provided as reference for interpreting the STC efficiency warning thresholds:
  
@@ -850,7 +1113,7 @@ These ranges are provided as reference for interpreting the STC efficiency warni
  
 Values above 25% trigger a warning. Values above 40% trigger a hard block. Neither threshold affects normal commercial module inputs.
  
-### 9.9 Typical Temperature Coefficient Ranges by Technology
+### 12.9 Typical Temperature Coefficient Ranges by Technology
  
 | Module Technology | Typical γ Range (%/°C) |
 |-------------------|------------------------|
@@ -860,7 +1123,7 @@ Values above 25% trigger a warning. Values above 40% trigger a hard block. Neith
  
 Values outside −0.10 to −0.45 trigger a warning. Values with magnitude 0 or above 0.60 trigger a hard block.
  
-### 9.10 Worked Example
+### 12.10 Worked Example
  
 Using a Waaree Super 400 (Mono PERC, 400 Wp) module, per published datasheet:
  
@@ -872,6 +1135,7 @@ Using a Waaree Super 400 (Mono PERC, 400 Wp) module, per published datasheet:
 - Measured DC Power: 245 W
 - Front POA Irradiance: 700 W/m²
 - Ambient Temperature: 30°C
+  
 **Step 1 — STC Efficiency:**
 ```
 η_STC = (400 / (2.016 × 1000)) × 100 = 19.84%
@@ -910,7 +1174,7 @@ Module PR = (245 / 256.1) × 100 = 95.7%
  
 **Result: Module PR of 95.7% — within the Optimal band (≥ 95%). No fault indicated.**
  
-### 9.11 STC Efficiency: Calculated vs. Manufacturer-Published
+### 12.11 STC Efficiency: Calculated vs. Manufacturer-Published
  
 A consistent gap of approximately 0.1–0.5% between the calculated STC efficiency (from footprint area) and the manufacturer's published figure is normal and does not indicate an error in either value. The cause is the area basis:
  
@@ -918,7 +1182,7 @@ A consistent gap of approximately 0.1–0.5% between the calculated STC efficien
 - **Manufacturer's published figure:** Typically uses tested active or aperture area, which excludes the frame border. This produces a slightly higher efficiency figure.
 When a datasheet provides an explicit efficiency figure, use that for datasheet comparisons. Use the footprint back-calculation only when the datasheet provides dimensions and power but no stated efficiency.
  
-### 9.12 Limitations
+### 12.12 Limitations
  
 - Uses a **linear temperature coefficient model**, which is a good approximation near STC but loses accuracy at temperature extremes compared to full two-diode I-V curve models.
 - Does not account for **spectral mismatch** (Air Mass deviation from 1.5), **angle-of-incidence losses**, or **soiling** as separate line items. These appear indirectly as a lower Module PR, not as individually quantified losses.
@@ -929,8 +1193,32 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 - This tool is not a substitute for full energy-yield simulation software (PVsyst, SAM, PlantPredict) for financial modelling or bankable yield estimates, nor for IEC 61215/61730 certification testing.
 ---
 
-## 10. Variable Reference Table
-
+## 13. Plant & Grid Generation Loss
+ 
+*Documentation for this calculator is in progress and will be published in a subsequent update.*
+ 
+---
+ 
+## 14. Plant & Grid Availability
+ 
+*Documentation for this calculator is in progress and will be published in a subsequent update.*
+ 
+---
+ 
+## 15. NMGG Calculator
+ 
+*Documentation for this calculator is in progress and will be published in a subsequent update.*
+ 
+---
+ 
+## 16. Solar Insolation — POA Back-Calculator
+ 
+*Documentation for this calculator is in progress and will be published in a subsequent update.*
+ 
+---
+ 
+## 17. Variable Reference Table
+ 
 | Symbol | Full Name | Unit | IEC 61724-1 Reference |
 |--------|-----------|------|-----------------------|
 | `E_AC` | Net AC energy output | kWh | Section 4.3 |
@@ -971,8 +1259,8 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 | `T_amb` | Ambient air temperature | °C | — |
 | `T_mod` | Measured back-of-module temperature | °C | — |
 | `NOCT` | Nominal Operating Cell Temperature | °C | IEC 61215-1 |
-| `U0` | Faiman model constant heat transfer coefficient | W/m²K | 29.0 (pvlib open-rack default) |
-| `U1` | Faiman model convective heat transfer coefficient | W/m²K/(m/s) | 6.9 (pvlib open-rack default) |
+| `U0` | Faiman model conductive/radiative heat loss coefficient | W/m²K | 29.0 (fixed) |
+| `U1` | Faiman model convective heat loss coefficient | W/m²K/(m/s) | 6.9 (fixed) |
 | `WS` | Wind speed | m/s | — |
 | `G_front` | Front-side plane-of-array irradiance | W/m² | — |
 | `G_rear` | Rear ground-reflected irradiance (bifacial) | W/m² | — |
@@ -985,15 +1273,15 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 | `Module PR` | Module Performance Ratio (health index) | % | Not an IEC plant-level metric |
  
 ---
-
-## 11. Standards Referenced
-
+ 
+## 18. Standards Referenced
+ 
 | Standard | Title | Relevance |
 |----------|-------|-----------|
 | **IEC 61724-1:2021** | Photovoltaic system performance — Part 1: Monitoring | Primary reference for all yield, PR, and loss metrics |
 | **IEC 61724-2:2016** | Photovoltaic system performance — Part 2: Capacity evaluation method | Capacity-based performance ratio methodology |
 | **IEC 61724-3:2016** | Photovoltaic system performance — Part 3: Energy evaluation method | Energy-based performance evaluation |
-| **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for long-term degradation characterisation |
+| **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for STC definition, NOCT test procedure, and long-term degradation characterisation |
 | **IEC 61683:1999** | Photovoltaic systems — Power conditioners — Procedure for measuring efficiency | Inverter efficiency measurement principle; basis for CEC-weighted and Euro-eta efficiency definitions |
 | **IEC 61730** | Photovoltaic module safety qualification | Physical operating limit reference for Solar Panel Efficiency Calculator validation ranges |
  
@@ -1004,20 +1292,18 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
  
 - Jordan, D.C. & Kurtz, S.R. (2013). *Photovoltaic Degradation Rates — An Analytical Review*. Progress in Photovoltaics: Research and Applications, 21(1), 12–29. [DOI: 10.1002/pip.1182](https://doi.org/10.1002/pip.1182)
 - NREL. *Best Practices for Operation and Maintenance of Photovoltaic and Energy Storage Systems*, 3rd Edition (2019). [nrel.gov/docs/fy19osti/73822.pdf](https://www.nrel.gov/docs/fy19osti/73822.pdf)
-- - Faiman, D. (2008). Assessing the outdoor operating temperature of photovoltaic modules. *Progress in Photovoltaics: Research and Applications*, 16(4), 307–315. [DOI: 10.1002/pip.780](https://doi.org/10.1002/pip.780)
 - Micheli, L. et al. (2021). *Photovoltaic soiling monitoring, losses, and efficiency*. Progress in Photovoltaics: Research and Applications. [DOI: 10.1002/pip.3441](https://doi.org/10.1002/pip.3441)
 ---
-
+ 
 ## Notes on Implementation
-
+ 
 - All calculations execute entirely client-side in the user's browser (JavaScript).
 - No plant data, energy figures, or inputs of any kind are transmitted to any server.
 - Input validation is applied on all fields. Results outside physically plausible ranges trigger a warning rather than silent acceptance.
 - Where inputs are estimated (for example, back-calculated POA insolation from plant output in the Solar Insolation calculator), this is stated explicitly in the calculator interface and should be treated as directional, not auditable.
 - The G_STC reference (1 kW/m² = 1000 W/m²) is a fixed physical constant and is not user-adjustable in any calculator on this site.
-
 ---
-
+ 
 *Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
-
-*Last updated: September 2026*
+ 
+*Last updated: October 2026*
