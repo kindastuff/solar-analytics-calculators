@@ -35,6 +35,7 @@ No sign-ups. No data uploads. Free to use, ad-supported. All calculations run lo
 | [Soiling Analysis](https://kindastuff.com/soiling-analysis/) | Module conversion efficiency before and after cleaning events — supports up to 20 sample pairs |
 | [Solar Inverter Efficiency Dashboard](https://kindastuff.com/solar-inverter-efficiency-dashboard/) | DC-to-AC conversion efficiency per inverter from CSV/Excel uploads — batch analysis up to 5 inverters |
 | [Solar Panel Efficiency Calculator](https://kindastuff.com/solar-panel-efficiency-calculator/) | STC, operating, and temperature-corrected module efficiency — NOCT and Faiman cell temperature models, bifacial gain, SCADA CSV import for up to 10 modules |
+| [Solar String Current Deviation Calculator](https://kindastuff.com/solar-string-current-deviation-calculator/) | Peer-group DC string current screening against combiner box or MPPT baseline — fixed ±% band and MAD outlier detection, zero-current fuse flagging, energy loss estimate |
 
  
 ### Availability & Loss Analytics
@@ -68,6 +69,7 @@ Standards referenced include:
 | IEC 61724-3:2016 | Energy evaluation method |
 | IEC 61215-1:2021 | Module design qualification — basis for degradation rates |
 | IEC 61683:1999 | Inverter efficiency measurement procedure |
+| IEC 62446-1 | PV system testing, documentation and maintenance — string current verification |
  
 ---
 
@@ -79,8 +81,7 @@ Most solar software requires account creation and server-side data processing. K
 - No plant data, energy figures, or inputs are transmitted to any server
 - No database storage of any kind
 - Google Analytics is used for basic traffic measurement only — no input data is captured
-- The site is supported by Google AdSense; ads are served independently and never see your calculator inputs or results
-This matters for O&M teams and asset managers working with commercially sensitive generation data.
+- The site is supported by Google AdSense; ads are served independently and never see your calculator inputs or results. This matters for O&M teams and asset managers working with commercially sensitive generation data.
  
 ---
 
