@@ -1542,6 +1542,6 @@ Eight strings in group `SMB-TEST-01`. Reference: Active Median. Fixed ±5% metho
 - The G_STC reference (1 kW/m² = 1000 W/m²) is a fixed physical constant and is not user-adjustable in any calculator on this site.
 ---
  
-*Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
+*Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com/) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
  
 *Last updated: October 2026*
