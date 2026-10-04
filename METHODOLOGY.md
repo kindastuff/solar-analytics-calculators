@@ -20,12 +20,13 @@ The website source code is not open-source. The calculation logic, however, is b
 10. [Soiling Analysis](#10-soiling-analysis)
 11. [Solar Inverter Efficiency Dashboard](#11-solar-inverter-efficiency-dashboard)
 12. [Solar Panel Efficiency Calculator](#12-solar-panel-efficiency-calculator)
-13. [Plant & Grid Generation Loss](#13-plant--grid-generation-loss) *(documentation in progress)*
-14. [Plant & Grid Availability](#14-plant--grid-availability) *(documentation in progress)*
-15. [NMGG Calculator](#15-nmgg-calculator) *(documentation in progress)*
-16. [Solar Insolation — POA Back-Calculator](#16-solar-insolation--poa-back-calculator) *(documentation in progress)*
-17. [Variable Reference Table](#17-variable-reference-table)
-18. [Standards Referenced](#18-standards-referenced)
+13. [Solar String Current Deviation Calculator](#13-solar-string-current-deviation-calculator)
+14. [Plant & Grid Generation Loss](#14-plant--grid-generation-loss) *(documentation in progress)*
+15. [Plant & Grid Availability](#15-plant--grid-availability) *(documentation in progress)*
+16. [NMGG Calculator](#16-nmgg-calculator) *(documentation in progress)*
+17. [Solar Insolation — POA Back-Calculator](#17-solar-insolation--poa-back-calculator) *(documentation in progress)*
+18. [Variable Reference Table](#18-variable-reference-table)
+19. [Standards Referenced](#19-standards-referenced)
 
 ---
 
@@ -1191,31 +1192,270 @@ When a datasheet provides an explicit efficiency figure, use that for datasheet 
 - This tool is not a substitute for full energy-yield simulation software (PVsyst, SAM, PlantPredict) for financial modelling or bankable yield estimates, nor for IEC 61215/61730 certification testing.
 ---
 
-## 13. Plant & Grid Generation Loss
+## 13. Solar String Current Deviation Calculator
+ 
+### 13.1 Definition
+ 
+The Solar String Current Deviation Calculator compares DC current readings from PV strings connected to the same combiner box or inverter MPPT channel, and flags readings that require field inspection. It operates on peer-group benchmarking — strings within the same group are compared against a reference current derived from the active (non-zero) strings in that group. It does not calculate Performance Ratio, energy yield, or plant-level efficiency.
+ 
+This is a **screening tool**, not a diagnostic instrument. It identifies which strings are statistically anomalous and recommends a field action. Confirming a fault requires physical testing: DC clamp meter measurement, string Voc check, I-V curve trace, thermal imaging, or insulation-resistance testing.
+ 
+### 13.2 Standard Reference
+ 
+**IEC 62446-1** (Photovoltaic systems — Requirements for testing, documentation and maintenance — Part 1: Grid connected systems) defines measurement and documentation requirements for grid-connected PV systems, including string-level current verification during commissioning and maintenance.
+ 
+The statistical methods used in this calculator — active median baseline, Modified Z-Score via Median Absolute Deviation (MAD) — are established robust statistical screening techniques. The MAD-based Modified Z-Score follows the method described in:
+ 
+> Iglewicz, B. & Hoaglin, D.C. (1993). *How to Detect and Handle Outliers*. ASQC Quality Press, Milwaukee.
+ 
+### 13.3 Input Data
+ 
+The calculator accepts three required columns and two optional columns per string reading:
+ 
+| Column | Description | Required |
+|--------|-------------|----------|
+| Group ID | Combiner box or MPPT channel identifier | Yes |
+| String ID | Unique string identifier within the group | Yes |
+| Current (A) | Measured DC string current | Yes |
+| Voltage (V) | String open-circuit or operating voltage | Optional |
+| Timestamp | Date and time of reading | Optional |
+ 
+**Input modes:** Manual entry via table interface, or CSV/TSV file upload (max 5 MB; formats `.csv`, `.tsv`, `.txt`).
+ 
+**Duplicate detection:** If the same String ID appears more than once within the same Group ID in manual entry or CSV upload, the duplicate is rejected with an error. Each string within a group must have a unique identifier.
+ 
+**Minimum group size:** A group requires at least 2 active strings to produce a peer comparison. A sole active string receives "Sole Active String — No Peer Benchmark" status and no deviation is calculated.
+ 
+### 13.4 Current Input Parsing and Validation
+ 
+Each current input is parsed with the following rules:
+ 
+| Condition | Classification | Action |
+|-----------|---------------|--------|
+| Current > 45 A | **Invalid** | Hard block — "implausibly high for a single PV string." Verify if this is a subcombiner bus reading |
+| Current > 25 A | **Warning** | Accepted — flagged as high. Confirm if this is a 2-string parallel harness (Y-branch) or high-power bifacial module |
+| 0.05 < Current ≤ 25 A | **Active** | Proceeds to group analytics |
+| Current ≤ 0.05 A | **Zero / near-zero** | Treated as inactive — excluded from baseline, flagged as "Zero Current — Check Fuse" |
+| Current < 0 A | **Negative polarity** | Accepted but flagged — "Check for reversed Hall sensor polarity or daytime reverse backfeed" |
+| Unreadable / non-numeric | **Invalid** | Excluded from all calculations — flagged as "Unreadable Reading" |
+ 
+**Zero-current threshold of 0.05 A** is a fixed constant, not user-adjustable. It is set at this level to account for Hall-effect sensor noise and quantisation error at near-zero current — readings at or below this threshold are indistinguishable from a true open-circuit condition in field-grade instrumentation.
+ 
+**Input format handling:** The parser accepts European comma decimals (`7,5` → 7.5), standard thousands separators (`1,234.5`), and unit suffixes (`9.2 A`, `≈9.2`). Values are normalised before evaluation.
+ 
+### 13.5 Group Baseline Calculation
+ 
+The user selects one of two reference types:
+ 
+**Active Median (recommended default):**
+```
+I_ref = median(I_active)
+```
+ 
+**Active Mean:**
+```
+I_ref = mean(I_active) = Σ I_active / n_active
+```
+ 
+In both cases, `I_active` is the set of strings with current > 0.05 A. Zero-current and near-zero strings are excluded before calculating the reference, so they do not lower the baseline and cause false flags on healthy strings.
+ 
+**Standard deviation** of the active group uses Bessel's correction:
+```
+σ = √[ Σ(Iᵢ − Ī)² / (n_active − 1) ]
+```
+ 
+**Coefficient of Variation (CV):**
+```
+CV (%) = (σ / Ī) × 100
+```
+ 
+CV is reported as a group spread indicator. A CV above 35% triggers a confidence downgrade.
+ 
+### 13.6 Fault Detection Methods
+ 
+The user selects one of two screening methods:
+ 
+#### Method A — Fixed Percentage Band (default ±5%)
+ 
+Percentage deviation from the group reference:
+```
+ΔI (%) = ((Iᵢ − I_ref) / I_ref) × 100
+```
+ 
+| Condition | Status | Badge |
+|-----------|--------|-------|
+| ΔI ≤ −threshold% | Underperforming | Flagged |
+| −threshold% < ΔI ≤ −0.6 × threshold% | Watch (Low Marginal) | Watch |
+| −0.6 × threshold% < ΔI < +0.6 × threshold% | Normal | Normal |
+| +0.6 × threshold% ≤ ΔI < +threshold% | Watch (High Marginal) | Watch |
+| ΔI ≥ +threshold% | High / Check Sensor | Flagged |
+ 
+Default threshold = 5%. Watch band therefore begins at ±3% (0.6 × 5%). Both thresholds are user-adjustable (range: 2–20%).
+ 
+#### Method B — Modified Z-Score via MAD
+ 
+The Modified Z-Score measures how many MAD units a string sits from the group median:
+ 
+```
+MAD = median(|Iᵢ − activeMedian|)
+ 
+M = 0.6745 × (Iᵢ − activeMedian) / MAD
+```
+ 
+The constant 0.6745 is `Φ⁻¹(0.75)` — the 75th percentile of the standard normal distribution — which scales MAD to be consistent with standard deviation for normally distributed data (Iglewicz & Hoaglin, 1993).
+ 
+| Condition | Status |
+|-----------|--------|
+| M ≤ −madThreshold | Underperforming |
+| −madThreshold < M ≤ −0.6 × madThreshold | Watch (Low Marginal) |
+| |M| < 0.6 × madThreshold | Normal |
+| +0.6 × madThreshold ≤ M < +madThreshold | Watch (High Marginal) |
+| M ≥ +madThreshold | High / Check Sensor |
+ 
+Default madThreshold = 3.5 (Iglewicz-Hoaglin standard outlier cutoff). Watch band begins at |M| = 2.1 (0.6 × 3.5). User-adjustable range: 1.5–5.0.
+ 
+**MAD collapse fallback:** When more than 50% of active strings produce identical current readings, MAD collapses to zero. In this case the calculator substitutes a scaled Mean Absolute Deviation:
+ 
+```
+MAD_fallback = 0.8453 × MeanAbsoluteDeviation
+```
+ 
+The constant 0.8453 = 0.6745 × √(π/2), which maintains consistency with the normal distribution scaling assumption.
+ 
+### 13.7 Confidence Rating
+ 
+The calculator produces a confidence rating (High / Medium / Low) for each group based on four conditions evaluated in order:
+ 
+| Condition | Effect |
+|-----------|--------|
+| n_active < 3 | Downgrade to **Low** — insufficient strings for statistical contrast |
+| n_active ≤ 4 | Downgrade to **Medium** — modest sample size |
+| activeMean < 0.5 A | Downgrade to **Low** — dawn/dusk/heavy overcast; sensor noise dominates |
+| activeMean < 1.5 A | Downgrade to **Medium** — low irradiance; re-screen near solar noon |
+| CV > 35% | Downgrade to **Medium** — high internal spread |
+| Stable reading checkbox not confirmed | Downgrade to **Medium** |
+ 
+The rating is a floor — once downgraded to Low, it cannot be upgraded by subsequent conditions.
+ 
+**On the stable reading checkbox:** The user confirms that readings were taken near solar noon under clear sky and stable irradiance. Without this confirmation, the confidence is capped at Medium regardless of other conditions, because string deviations under low or unstable irradiance are not reliable for fault detection decisions.
+ 
+### 13.8 Energy and Revenue Loss Estimation
+ 
+The calculator estimates daily and annual energy deficit from underperforming strings using a Peak Sun Hour normalisation model:
+ 
+**Step 1 — Fractional deficit per string:**
+```
+δᵢ = max(0, (I_ref − Iᵢ) / I_ref)    for strings where Iᵢ < I_ref
+```
+ 
+Zero-current strings receive δ = 1.0 (full string loss). Strings at or above the reference receive δ = 0 (no loss contribution).
+ 
+**Step 2 — Expected healthy daily yield per string:**
+```
+E_healthy (kWh/day) = P_string_STC × PSH × PR
+```
+ 
+**Step 3 — Total daily energy deficit:**
+```
+E_daily_loss (kWh/day) = Σδᵢ × E_healthy
+```
+ 
+**Step 4 — Annual figures:**
+```
+E_annual_loss (kWh/yr) = E_daily_loss × 365
+Revenue_loss ($/yr) = E_annual_loss × tariff ($/kWh)
+```
+ 
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `P_string_STC` | Rated DC power per string at STC | 15.0 kWp (user input) |
+| `PSH` | Daily Peak Sun Hours at site | 4.5 h (user input) |
+| `PR` | Performance Ratio assumption | 0.80 (fixed internally) |
+| `tariff` | PPA or energy sale rate | 0.06 $/kWh (user input) |
+ 
+**Why PSH normalisation instead of snapshot multiplication:** Multiplying a noon current deficit directly by operating hours (e.g., 10 hours/day) overstates losses by 40–70%, because actual irradiance follows a diurnal curve and the deficit fraction at noon does not represent the full day. PSH normalisation applies the deficit against the equivalent full-load hours, producing a more defensible estimate. This is an operational screening estimate — not a PVsyst-equivalent yield simulation.
+ 
+**Unreadable rows** are excluded from energy calculations. Only strings with a parsed current value below the reference contribute to the loss total.
+ 
+### 13.9 Output
+ 
+For each group, the calculator produces:
+ 
+- **KPI summary:** Active / total strings, reference current, Coefficient of Variation, count of flagged strings
+- **Confidence rating** with stated reasons
+- **Bar chart:** Per-string current with colour-coded deviation bands
+- **Results table:** String ID, current, deviation (%), Modified Z-Score, status badge, recommended field action
+- **Energy impact panel:** Daily kWh loss, annual kWh loss, annual revenue impact
+**Export formats:** CSV (per-group, with deviation and action columns) and JSON (full analytics payload including settings and all group results).
+ 
+### 13.10 Worked Example
+ 
+Eight strings in group `SMB-TEST-01`. Reference: Active Median. Fixed ±5% method.
+ 
+| String | Current (A) | Status |
+|--------|-------------|--------|
+| Str01 | 12.85 | Active |
+| Str02 | 12.90 | Active |
+| Str03 | 0.00 | Zero — excluded from baseline |
+| Str04 | 12.80 | Active |
+| Str05 | 10.45 | Active |
+| Str06 | 12.92 | Active |
+| Str07 | 12.30 | Active |
+| Str08 | 13.40 | Active |
+ 
+**Active values (7 strings):** 10.45, 12.30, 12.80, 12.85, 12.90, 12.92, 13.40
+ 
+**Active Median (I_ref):** 12.85 A (middle value of 7)
+ 
+**Deviation calculations:**
+ 
+| String | ΔI (%) | Result |
+|--------|--------|--------|
+| Str03 | −100.0% | Zero Current — Check Fuse |
+| Str05 | −18.7% | Underperforming (≤ −5%) |
+| Str07 | −4.3% | Watch — Low Marginal (between −3% and −5%) |
+| Str01 | 0.0% | Normal |
+| Str04 | −0.4% | Normal |
+| Str02 | +0.4% | Normal |
+| Str06 | +0.5% | Normal |
+| Str08 | +4.3% | Watch — High Marginal (between +3% and +5%) |
+ 
+### 13.11 Limitations
+ 
+- This calculator performs peer-group screening only. It does not confirm electrical faults, quantify degradation rates, or replace field testing with calibrated instruments.
+- Comparisons are only valid between strings of the same module model, same number of series modules, same tilt and azimuth, and same tracker position. Mixing different configurations in one group will produce misleading deviations.
+- Results taken at low irradiance (below approximately 200 W/m²), during cloud transients, or with tracker movement are unreliable. The confidence rating reflects this but does not prevent calculation.
+- The energy loss estimate uses a fixed PR of 0.80. If your plant's actual PR differs significantly, the revenue impact figure will be proportionally inaccurate.
+- Equal current between two strings does not prove equal energy production, because voltage and operating temperature still affect output.
+- The calculator does not model voltage, power output, fill factor, or I-V curve characteristics. It operates solely on DC current magnitude.
+  
+---
+
+## 14. Plant & Grid Generation Loss
  
 *Documentation for this calculator is in progress and will be published in a subsequent update.*
  
 ---
  
-## 14. Plant & Grid Availability
+## 15. Plant & Grid Availability
  
 *Documentation for this calculator is in progress and will be published in a subsequent update.*
  
 ---
  
-## 15. NMGG Calculator
+## 16. NMGG Calculator
  
 *Documentation for this calculator is in progress and will be published in a subsequent update.*
  
 ---
  
-## 16. Solar Insolation — POA Back-Calculator
+## 17. Solar Insolation — POA Back-Calculator
  
 *Documentation for this calculator is in progress and will be published in a subsequent update.*
  
 ---
  
-## 17. Variable Reference Table
+## 18. Variable Reference Table
  
 | Symbol | Full Name | Unit | IEC 61724-1 Reference |
 |--------|-----------|------|-----------------------|
