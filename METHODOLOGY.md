@@ -1512,7 +1512,7 @@ Eight strings in group `SMB-TEST-01`. Reference: Active Median. Fixed ±5% metho
  
 ---
  
-## 18. Standards Referenced
+## 19. Standards Referenced
  
 | Standard | Title | Relevance |
 |----------|-------|-----------|
