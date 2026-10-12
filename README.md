@@ -50,7 +50,7 @@ No sign-ups. No data uploads. Free to use, ad-supported. All calculations run lo
  
 | Tool | What It Calculates |
 | :-- | :-- |
-| [Solar Insolation — POA](https://kindastuff.com/solar-insolation-calculator/) | Back-calculate plane-of-array insolation from plant output data |
+| [Solar Insolation — POA](https://kindastuff.com/solar-insolation-calculator/) | Back-calculates POA insolation from energy output using two independent methods — capacity-based and area-based — cross-validated within 25% tolerance |
  
 ---
  
