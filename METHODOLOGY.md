@@ -24,7 +24,7 @@ The website source code is not open-source. The calculation logic, however, is b
 14. [Plant & Grid Generation Loss](#14-plant--grid-generation-loss) *(documentation in progress)*
 15. [Plant & Grid Availability](#15-plant--grid-availability) *(documentation in progress)*
 16. [NMGG Calculator](#16-nmgg-calculator) *(documentation in progress)*
-17. [Solar Insolation — POA Back-Calculator](#17-solar-insolation--poa-back-calculator) *(documentation in progress)*
+17. [Solar Insolation — POA Back-Calculator](#17-solar-insolation--poa-back-calculator)
 18. [Variable Reference Table](#18-variable-reference-table)
 19. [Standards Referenced](#19-standards-referenced)
 
@@ -1451,7 +1451,167 @@ Eight strings in group `SMB-TEST-01`. Reference: Active Median. Fixed ±5% metho
  
 ## 17. Solar Insolation — POA Back-Calculator
  
-*Documentation for this calculator is in progress and will be published in a subsequent update.*
+### 17.1 Definition
+ 
+The Solar Insolation — POA Back-Calculator derives plane-of-array (POA) insolation from plant energy output, using two independent back-calculation methods and cross-validating their results. It is intended for situations where a direct POA irradiance sensor reading is unavailable or suspect, and the engineer needs to estimate what the array actually received based on measured energy and known plant characteristics.
+
+**This is an estimation tool, not a measurement.** Back-calculated POA insolation is directional — it is derived from energy output and inherits all assumptions and losses embedded in the PR and module efficiency inputs. It should not be treated as an auditable figure or used as a substitute for calibrated pyranometer or reference cell data.
+
+### 17.2 Standard Reference
+ 
+Both back-calculation methods are algebraic rearrangements of formulas defined in **IEC 61724-1:2021**:
+
+- **Capacity-based method:** Rearrangement of the Performance Ratio definition (Section 7.5)
+- **Area-based method:** Rearrangement of the Efficiency-Based PR formula (Section 7.5, efficiency normalisation form)
+No new formulas are introduced. Both methods use the same standard IEC 61724-1 PR relationships in reverse.
+
+### 17.3 Inputs
+ 
+| Input | Description | Unit | Validation |
+|-------|-------------|------|------------|
+| Energy Generated | Net AC energy output during the period | kWh | ≥ 0.01 (HTML) |
+| Plant DC Capacity | Total nameplate DC capacity of installed PV modules | kWp | ≥ 1 (HTML) |
+| Plant Area | Total active surface area of all PV modules | m² | ≥ 1 (HTML) |
+| Irradiance @ STC | Standard test condition irradiance reference | kW/m² | Fixed at 1 — not user-adjustable |
+| Module Efficiency | Rated module conversion efficiency from datasheet | % | 10–40 |
+| Average PR | Plant Performance Ratio for the reporting period | % | 10–95 |
+
+**On Irradiance @ STC:** Fixed at 1 kW/m² as a physical constant, consistent with IEC 61724-1 and all other PR calculators on this site.
+ 
+**On Average PR input range (10–95%):** The lower bound of 10% excludes physically implausible plant performance. The upper bound of 95% excludes values that would only appear with severe irradiance sensor errors or data quality problems. This range accepts most real-world operational plants.
+
+**On Plant Area:** This input is the total active module surface area — the same definition used in the Efficiency-Based PR calculator. It excludes land area, walkways, spacing, and non-generating surfaces.
+
+### 17.4 Calculation Method
+ 
+The calculator applies two independent back-calculations and cross-validates their outputs.
+ 
+---
+ 
+**Method 1 — Capacity-Based Back-Calculation**
+ 
+Derived by solving the IEC 61724-1 §7.5 Performance Ratio formula for H_POA:
+ 
+Starting from:
+```
+PR = (E_AC / P_DC) / (H_POA / G_STC)
+```
+ 
+Solving for H_POA:
+```
+H_POA_capacity = (E_AC / P_DC) × (G_STC / PR)
+```
+ 
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `E_AC` | Net AC energy output | kWh |
+| `P_DC` | Plant DC nameplate capacity | kWp |
+| `G_STC` | STC irradiance = 1 kW/m² (fixed) | kW/m² |
+| `PR` | Average Performance Ratio (entered as %, converted to decimal) | — |
+| `H_POA_capacity` | Back-calculated POA insolation (capacity method) | kWh/m² |
+ 
+---
+
+**Method 2 — Area-Based Back-Calculation**
+ 
+Derived by solving the Efficiency-Based PR formula for H_POA:
+ 
+Starting from:
+```
+PR = E_AC / (A × η_module × H_POA)
+```
+ 
+Solving for H_POA:
+```
+H_POA_area = E_AC / (A × η_module × PR)
+```
+ 
+| Variable | Description | Unit |
+|----------|-------------|------|
+| `E_AC` | Net AC energy output | kWh |
+| `A` | Total active module area | m² |
+| `η_module` | Module efficiency (entered as %, converted to decimal) | — |
+| `PR` | Average Performance Ratio (entered as %, converted to decimal) | — |
+| `H_POA_area` | Back-calculated POA insolation (area method) | kWh/m² |
+ 
+---
+
+**Cross-Validation**
+ 
+The percentage difference between the two methods is calculated:
+ 
+```
+Difference (%) = |H_POA_area − H_POA_capacity| / H_POA_area × 100
+```
+ 
+| Difference | Result |
+|------------|--------|
+| ≤ 25% | Both values are averaged and reported |
+| > 25% | Calculation is rejected — "Error. Please verify your inputs." |
+ 
+**If the two methods agree (≤ 25% difference), the output is:**
+ 
+```
+H_POA = (H_POA_capacity + H_POA_area) / 2
+```
+ 
+The result is displayed as: `Insolation POA = X.XX kWh/m²`
+
+### 17.5 Why Two Methods Are Used
+ 
+The two methods use different inputs to reach the same quantity:
+ 
+- Method 1 uses **DC capacity** — a nameplate value from commissioning documents
+- Method 2 uses **module area and efficiency** — physical and datasheet values
+If both methods return similar results, it indicates that the inputs are internally consistent: the DC capacity, module area, and module efficiency are all compatible with each other and with the reported energy output. If they diverge significantly, it means at least one of the inputs — DC capacity, area, efficiency, or PR — is likely incorrect or inconsistent.
+ 
+The 25% disagreement threshold is the rejection criterion. **Within the 25% band, the disagreement is not shown to the user** — the two values are silently averaged. This is a limitation: a 15% disagreement between the two methods already indicates meaningful inconsistency in the inputs, but the calculator will still return a result without flagging the divergence. Engineers should treat any back-calculated value with appropriate caution and verify inputs carefully.
+
+### 17.6 Worked Example
+ 
+**Inputs:**
+- Energy Generated: 48,000 kWh
+- Plant DC Capacity: 1,000 kWp
+- Plant Area: 5,000 m²
+- Irradiance @ STC: 1 kW/m² (fixed)
+- Module Efficiency: 19%
+- Average PR: 80%
+  
+**Method 1 — Capacity-Based:**
+```
+H_POA_capacity = (48,000 / 1,000) × (1 / 0.80)
+               = 48 × 1.25
+               = 60.00 kWh/m²
+```
+
+**Method 2 — Area-Based:**
+```
+H_POA_area = 48,000 / (5,000 × 0.19 × 0.80)
+           = 48,000 / 760
+           = 63.16 kWh/m²
+```
+
+**Cross-validation:**
+```
+Difference = |63.16 − 60.00| / 63.16 × 100 = 5.0%
+```
+ 
+5.0% < 25% — within the acceptance criterion.
+ 
+**Output:**
+```
+H_POA = (60.00 + 63.16) / 2 = 61.58 kWh/m²
+Insolation POA = 61.58 kWh/m²
+```
+
+### 17.7 Limitations
+ 
+- Back-calculated POA insolation is an **estimate derived from assumed losses**, not a measurement. The result inherits all uncertainty in the PR and module efficiency inputs.
+- The PR input is the most sensitive variable. A 5% error in PR produces a proportional 5% error in the back-calculated insolation. Before using this tool, ensure the PR value entered reflects actual operational performance for the same period as the energy figure.
+- The 25% convergence threshold does not guarantee accuracy within 25%. Two methods can agree within 25% while both being wrong if the DC capacity, area, and efficiency inputs are consistently scaled incorrectly relative to each other.
+- This calculator does not apply a physical upper bound to the output. Back-calculated values that exceed physically plausible daily insolation for the site (typically 3.0–7.5 kWh/m²/day for most locations) should be treated as indicative of input errors.
+- The result should not be used as a substitute for measured POA insolation in PR calculations, performance audits, or contractual reporting.
+- Module efficiency should reflect the current in-field performance of the modules, not just the nameplate datasheet value. Post-degradation efficiency will be lower than nameplate, and using the nameplate value will cause the area-based method to underestimate insolation.
  
 ---
  
