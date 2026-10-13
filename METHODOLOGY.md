@@ -122,22 +122,20 @@ IEC 61724-1:2021, **Section 4 (Measurement Parameters)** and **Section 7 (Perfor
 
 Module degradation rates are defined in product datasheets. Industry reference values for crystalline silicon modules:
 
-- Annual degradation: 0.4%–0.7% per year for crystalline silicon modules, applied uniformly across all years in this calculator
-- Subsequent annual degradation: 0.4%–0.7% per year (IEC 61215 long-term characterisation studies; NREL Photovoltaic Degradation Rates — Jordan & Kurtz, *Progress in Photovoltaics*, 2013)
+- Annual degradation: 0.4%–0.7% per year for crystalline silicon modules, applied uniformly across all years in this calculator (IEC 61215 long-term characterisation studies; NREL Photovoltaic Degradation Rates — Jordan & Kurtz, *Progress in Photovoltaics*, 2013)
 
 ### 2.3 Formula
 
 **Step 1 — Degradation-Adjusted DC Capacity**
 
 ```
-P_DC_corrected = P_DC_nameplate × [ 1 - (D1/100) ] × [ 1 - (Da/100) ]^(n-1)
+P_DC_corrected = P_DC_nameplate × (1 − Da/100)^n
 ```
 
 | Variable | Description | Unit |
 |---|---|---|
 | `P_DC_nameplate` | Original nameplate DC capacity at commissioning | kWp |
-| `D1` | First-year degradation rate | % |
-| `Da` | Annual degradation rate (year 2 onwards) | % |
+| `Da` | Annual module degradation rate (uniform across all years) | % |
 | `n` | Number of years since commissioning (n ≥  0.01) | years |
 | `P_DC_corrected` | Degradation-adjusted DC capacity | kWp |
 
@@ -1056,7 +1054,7 @@ This is a module-level health index — the ratio of actual measured output to e
 | Negative measured power | Set to 0, warning logged |
 | Module temperature outside −40°C to 100°C | Warning logged, row retained |
 | Irradiance > 1500 W/m² | Warning logged ("Check sensors"), row retained |
-| Irradiance < 50 W/m² | **Excluded from efficiency calculations** (nighttime filtering — see Section 9.5) |
+| Irradiance < 50 W/m² | **Excluded from efficiency calculations** (nighttime filtering — see Section 12.5) |
 | Corrupted row (parse error) | Skipped with error logged; valid rows continue processing |
  
 **Delimiter auto-detection:** The parser counts comma and semicolon occurrences in the header row and selects whichever appears more frequently. Both decimal representations (period and comma as decimal separator) are handled.
@@ -1139,7 +1137,7 @@ Using a Waaree Super 400 (Mono PERC, 400 Wp) module, per published datasheet:
 ```
 η_STC = (400 / (2.016 × 1000)) × 100 = 19.84%
 ```
-Note: the manufacturer's published efficiency (20.17%) uses tested active area, which differs slightly from the frame-to-frame footprint calculation above. Both are valid — see Section 9.11 for explanation.
+Note: the manufacturer's published efficiency (20.17%) uses tested active area, which differs slightly from the frame-to-frame footprint calculation above. Both are valid — see Section 12.11 for explanation.
  
 **Step 2 — Cell Temperature (NOCT model, using module's actual NOCT of 43°C):**
 ```
@@ -1677,10 +1675,10 @@ Insolation POA = 61.58 kWh/m²
 | Standard | Title | Relevance |
 |----------|-------|-----------|
 | **IEC 61724-1:2021** | Photovoltaic system performance — Part 1: Monitoring | Primary reference for all yield, PR, and loss metrics |
-| **IEC 61724-2:2016** | Photovoltaic system performance — Part 2: Capacity evaluation method | Capacity-based performance ratio methodology |
-| **IEC 61724-3:2016** | Photovoltaic system performance — Part 3: Energy evaluation method | Energy-based performance evaluation |
+| **IEC 61724-2:2016** | Photovoltaic system performance — Part 2: Capacity evaluation method | Related framework for DC capacity normalisation |
+| **IEC 61724-3:2016** | Photovoltaic system performance — Part 3: Energy evaluation method | Related framework for energy-based performance assessment |
 | **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for STC definition, NOCT test procedure, and long-term degradation characterisation |
-| **IEC 61683:1999** | Photovoltaic systems — Power conditioners — Procedure for measuring efficiency | Inverter efficiency measurement principle; basis for CEC-weighted and Euro-eta efficiency definitions |
+| **IEC 61683:1999** | Photovoltaic systems — Power conditioners — Procedure for measuring efficiency | Inverter efficiency measurement procedure — defines the laboratory test framework for PV power conditioners; European weighted efficiency (Euro-eta) follows this standard's load-point methodology |
 | **IEC 61730** | Photovoltaic module safety qualification | Physical operating limit reference for Solar Panel Efficiency Calculator validation ranges |
  
 > **Important note on IEC 61724-1:2021 application:**
