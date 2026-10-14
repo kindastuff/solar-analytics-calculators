@@ -668,10 +668,12 @@ Where n is the number of valid sample pairs submitted. This is a simple arithmet
 The soiling loss for any sample or the overall dataset can be derived directly from the efficiency values:
  
 ```
-Soiling Loss (percentage points) = Post-Clean Efficiency − Pre-Clean Efficiency
+Efficiency difference (percentage points) = Post-Clean Efficiency − Pre-Clean Efficiency
+
+Relative soiling loss (%) = (Post-Clean Efficiency − Pre-Clean Efficiency) / Post-Clean Efficiency × 100
 ```
  
-A soiling loss of 0.18 percentage points means the modules were converting 0.18% less of available irradiance before cleaning than after. The calculator does not output this difference explicitly — the user derives it from the two reported efficiency figures.
+A difference of 0.18 percentage points means the modules were converting 0.18 percentage points less of the available irradiance before cleaning than after. On a post-clean efficiency of 18.0% that is a relative soiling loss of about 1.0%. State which figure you are quoting: percentage points and relative percentages are not interchangeable. The calculator reports the two efficiency figures; derive the soiling loss from them until the difference is added to the calculator output.
  
 ### 10.6 Data Collection Requirements
  
@@ -1636,8 +1638,7 @@ Insolation POA = 61.58 kWh/m²
 | `A_total` | Total active module area | m² | — |
 | `η_module` | Rated module conversion efficiency | % | — (module datasheet) |
 | `SR` | Soiling Ratio | dimensionless | — |
-| `D1` | First-year module degradation rate | % | — (datasheet) |
-| `Da` | Annual module degradation rate (year 2 onwards) | % | — (datasheet / IEC 61215) |
+| `Da` | Annual module degradation rate (applied uniformly across all years in the calculator) | % | — (datasheet / IEC 61215) |
 | `n` | Years since commissioning | years | — |
 | `SF` | Insolation Scaling Factor | dimensionless | — |
 | `PTI` | Performance Target Index | dimensionless | Not an IEC metric |
@@ -1680,6 +1681,8 @@ Insolation POA = 61.58 kWh/m²
 | **IEC 61215-1:2021** | Terrestrial PV modules — Design qualification and type approval | Basis for STC definition, NOCT test procedure, and long-term degradation characterisation |
 | **IEC 61683:1999** | Photovoltaic systems — Power conditioners — Procedure for measuring efficiency | Inverter efficiency measurement procedure — defines the laboratory test framework for PV power conditioners; European weighted efficiency (Euro-eta) follows this standard's load-point methodology |
 | **IEC 61730** | Photovoltaic module safety qualification | Physical operating limit reference for Solar Panel Efficiency Calculator validation ranges |
+| **IEC 62446-1** | Photovoltaic systems — Requirements for testing, documentation and maintenance — Part 1: Grid connected systems | String-level current verification and documentation requirements referenced by the String Current Deviation Calculator (Section 13) |
+| **IEC/TS 63019:2019** | Photovoltaic power systems — Availability: terms, definitions and measurement | Availability terminology and reporting framework for the Plant & Grid Availability calculator (Section 15) |
  
 > **Important note on IEC 61724-1:2021 application:**
 > This standard defines `P_o` as DC nameplate capacity. Where calculators on this site accept AC capacity inputs (CUF/PLF calculator), this extension is documented explicitly in the relevant section. The formula structure and mathematical logic remain consistent with IEC 61724-1; only the capacity reference variable is adjusted to match contractual requirements.
