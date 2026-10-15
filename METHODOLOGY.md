@@ -476,7 +476,7 @@ PR_instantaneous (%) = [ P_AC / (P_DC × G_POA / G_STC) ] × 100
   
 **On the 200 W/m² irradiance floor:** Inputs below 200 W/m² are rejected with the message "Irradiance too low for accurate PR calculation (< 200 W/m²)". This is a hard block — the form does not submit. At irradiance levels below approximately 200 W/m², inverter efficiency characteristics become non-linear, and signal-to-noise ratios in both the power meter and irradiance sensor degrade to the point where the calculated PR is not meaningful for diagnostic purposes.
  
-**On the 1361 W/m² irradiance ceiling:** 1361 W/m² is the solar constant — the total solar irradiance at the top of Earth's atmosphere. POA irradiance at ground level cannot physically exceed this value. Inputs above this threshold are rejected with the explicit message "Irradiance exceeds 1361 W/m²."
+**On the 1361 W/m² irradiance ceiling:** Readings above 1361 W/m² (the solar constant) are rejected as probable sensor or data errors. Short cloud-edge enhancement events can briefly exceed this level, but they are not suitable for a diagnostic PR calculation."
  
 **On AC Power vs DC Capacity:** AC power output cannot exceed installed DC capacity in this calculator. If AC power entered exceeds DC capacity, the calculation is blocked with the message "AC power cannot exceed installed DC capacity in this calculator model." This prevents physically impossible inputs and distinguishes this calculator from plant-level tools that accept AC output independently of DC capacity.
  
