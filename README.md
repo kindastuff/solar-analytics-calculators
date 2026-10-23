@@ -14,16 +14,16 @@ No sign-ups. No data uploads. Free to use, ad-supported. All calculations run lo
 
 | Tool | What It Calculates |
 | :-- | :-- |
-| [CUF / PLF](https://kindastuff.com/conventional-cuf-or-plf/) | Capacity Utilization Factor against DC or AC capacity — accepts both IEC 61724-1 and PPA conventions |
+| [CUF / PLF](https://kindastuff.com/conventional-cuf-or-plf/) | Capacity Utilization Factor against DC or AC capacity — the DC basis follows IEC 61724-1:2021 final yield (cl. 13.6.3); the AC basis is the PPA/CERC convention |
 | [Degradation & Insolation Corrected CUF](https://kindastuff.com/degradation-insolation-corrected-cuf/) | CUF adjusted for module aging and irradiance deviation from design-year assumptions |
-| [Specific Yield & PTI](https://kindastuff.com/yield-performance-metrics/) | Final Yield (kWh/kWp) per IEC 61724-1 §7.3 and Performance Target Index |
+| [Specific Yield & PTI](https://kindastuff.com/yield-performance-metrics/) | Final Yield (kWh/kWp) per IEC 61724-1:2021, cl. 13.6.3, and a Kindastuff-defined Performance Target Index |
 | [NMGG Calculator](https://kindastuff.com/nmgg-calculator/) | Net Minimum Guaranteed Generation targets for contractual compliance |
 
 ### Performance Ratio Analytics
  
 | Tool | What It Calculates |
 | :-- | :-- |
-| [Capacity-Based PR](https://kindastuff.com/capacity-based-pr/) | Performance Ratio using DC nameplate capacity and POA insolation — IEC 61724-1 §7.5 |
+| [Capacity-Based PR](https://kindastuff.com/capacity-based-pr/) | Performance Ratio using DC nameplate capacity and POA insolation — IEC 61724-1:2021, cl. 14.3.1 |
 | [Efficiency-Based PR](https://kindastuff.com/efficiency-based-pr/) | PR using total active module area and rated module efficiency |
 | [Instantaneous PR](https://kindastuff.com/instantaneous-pr/) | Real-time PR from SCADA power and irradiance readings |
 | [Temperature-Corrected PR](https://kindastuff.com/temperature-corrected-pr/) | PR normalized for module temperature using manufacturer temperature coefficient — IEC 61724-1 Annex B |
