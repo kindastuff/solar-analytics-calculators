@@ -858,7 +858,7 @@ If a drop in inverter efficiency correlates with dusty conditions, cross-check a
 
 ### 12.1 Definition
 
-The Solar Panel Efficiency Calculator computes STC efficiency, operating efficiency, temperature-corrected efficiency, expected output, and Module Performance Ratio (Module PR) for individual PV modules. It operates in three modes: manual single-module calculation, side-by-side comparison of up to 10 modules, and time-series SCADA CSV import for batch diagnostic analysis. All calculations execute client-side in the browser — no module or plant data is transmitted anywhere.
+The Solar Panel Efficiency Calculator computes STC efficiency, operating efficiency, temperature-corrected efficiency, expected output, and Module Performance Ratio (Module PR) for individual PV modules. It operates in three modes: manual single-module calculation, side-by-side comparison of up to 10 modules, and time-series SCADA CSV import for batch diagnostic analysis. All calculations execute client-side in the browser — no module or plant data is transmitted anywhere. Cell temperature is taken from **one explicitly selected source** (direct cell temperature, back-of-module RTD, NOCT model or Faiman model); there is no implicit fallback between sources.
 
 This calculator operates at **module level**, not plant level. It isolates individual module performance from a measured DC power output and irradiance reading. It does not calculate plant-level Performance Ratio (which requires AC energy output, total DC capacity, and POA insolation integrated over a period) — for those, see [Capacity-Based PR](#6-capacity-based-performance-ratio-pr) or [Efficiency-Based PR](#7-efficiency-based-performance-ratio-pr).
 
@@ -896,9 +896,22 @@ A manual area override input is provided for cases where the user has physically
 | `A` | Module active area | m² |
 | `G_STC` | STC irradiance = 1000 W/m² (fixed constant) | W/m² |
 
-**C. Cell Temperature Estimation — NOCT Model**
+**C. Cell Temperature Source Selection**
 
-Used when direct cell or back-of-module temperature is not available:
+The calculator uses exactly **one** cell temperature source, chosen by the user. There is no implicit priority between inputs, and fields that belong to a different source are ignored (and hidden in the interface).
+
+| Source | `T_cell` | Required inputs |
+|--------|----------|-----------------|
+| Direct cell temperature | `T_cell` = measured value | Direct Cell Temperature |
+| Back-of-module RTD | `T_cell = T_mod + (G_total / 1000) × ΔT_cond` | `T_mod`, `ΔT_cond` |
+| NOCT model | See D | `T_amb`, `NOCT` |
+| Faiman model | See E | `T_amb`, `WS` |
+
+If a required input for the selected source is blank, the calculator shows an error and no temperature-dependent result is displayed (STC efficiency is still shown). The cell temperature used, and how it was obtained, is displayed beneath the results (for example "Cell T = 45.49 °C (RTD 42.5 + 2.99 offset)").
+
+**D. Cell Temperature Estimation — NOCT Model**
+
+Used when the NOCT model is selected as the cell temperature source:
 
 ```
 T_cell = T_amb + G_total × [ (NOCT - 20) / 800 ]
@@ -910,23 +923,25 @@ T_cell = T_amb + G_total × [ (NOCT - 20) / 800 ]
 | `G_total` | Total effective POA irradiance | W/m² | User input |
 | `NOCT` | Nominal Operating Cell Temperature from datasheet | °C | 45°C |
 
-**D. Cell Temperature Estimation — Faiman Model**
+**E. Cell Temperature Estimation — Faiman Model**
 
 Wind-corrected cell temperature based on the Faiman (2008) model form:
 
+```
 T_cell = T_amb + G_total / (U0 + U1 × WS)
+```
 
 | Variable | Description | Unit | Value |
 |----------|-------------|------|-------|
-| `U0` | Constant heat transfer coefficient | W/m²K | 29.0 |
-| `U1` | Convective heat transfer coefficient | W/m²K/(m/s) | 6.9 |
+| `U0` | Constant heat transfer coefficient | W/m²K | 25.0 |
+| `U1` | Convective heat transfer coefficient | W/m²K/(m/s) | 6.84 |
 | `WS` | Wind speed | m/s | User input |
 
-**On U0 and U1 values:** The model form follows Faiman (2008). This implementation uses fixed values of U0 = 29.0 W/m²K and U1 = 6.9 W/m²K/(m/s). These are **not** Faiman's published combined fit for seven silicon modules (U0 = 25.0 and U1 = 6.84, which pvlib also uses as its Faiman defaults), and they are not the PVsyst freestanding default (U_c = 29.0 with U_v = 0). At 1000 W/m² and 1 m/s the implemented pair gives a cell-to-ambient rise of about 27.9 °C, against about 31.4 °C for the published pair, so results run roughly 3.5 °C cooler than with Faiman's published values. Users with site-specific U-value measurements, or a measured back-of-module temperature, will obtain more accurate results by using the RTD input instead.
+**On U0 and U1 values:** The model form follows Faiman (2008), and this implementation uses Faiman's published combined fit for seven silicon modules, U0 = 25.0 W/m²K and U1 = 6.84 W/m²K/(m/s), which are also the pvlib Faiman defaults. They are **not** the PVsyst freestanding default (U_c = 29.0 with U_v = 0), which has no wind term. At 1000 W/m² and 1 m/s the implemented pair gives a cell-to-ambient rise of about 31.4 °C. Fitted U-values depend on the module and its mounting, so for a specific installation a measured back-of-module temperature (RTD source) or a direct cell temperature will be more accurate. Earlier versions of this calculator used U0 = 29.0 and U1 = 6.9, which gave cell temperatures about 3.5 °C cooler.
 
 **Reference:** Faiman, D. (2008). Assessing the outdoor operating temperature of photovoltaic modules. Progress in Photovoltaics, 16(4), 307–315.
 
-**E. Cell Temperature from Back-of-Module RTD**
+**F. Cell Temperature from Back-of-Module RTD**
 
 When a temperature sensor is taped to the rear of the module:
 
@@ -937,20 +952,24 @@ T_cell = T_mod + (G_total / 1000) × ΔT_cond
 | Variable | Description | Unit | Default |
 |----------|-------------|------|---------|
 | `T_mod` | Measured back-of-module temperature | °C | User input |
-| `ΔT_cond` | Cell-to-back-of-module temperature delta at 1000 W/m² | °C | 3°C (open-rack) |
+| `ΔT_cond` | Cell-to-back-of-module temperature delta at 1000 W/m² | °C | User input, 0–10 °C (default 3 °C, open-rack) |
 
-**F. Total Effective Irradiance — Bifacial Modules**
+`G_total` is the effective irradiance defined in G below, so the offset includes the rear contribution for bifacial modules.
 
-For monofacial modules: `G_total = G_front`
+**G. Total Effective Irradiance — Bifacial Modules**
 
-For bifacial modules — using bifacial gain percentage:
-```
-G_total = G_front × (1 + BG / 100)
-```
+For monofacial modules (Bifacial option off): `G_total = G_front`
 
-For bifacial modules — using measured rear irradiance and bifaciality factor:
+For bifacial modules the user selects **one** input method. Only the selected method is used; a gain percentage never overrides rear irradiance, or the reverse.
+
+Method 1 — measured rear irradiance and bifaciality factor:
 ```
 G_total = G_front + (G_rear × φ)
+```
+
+Method 2 — bifacial gain percentage:
+```
+G_total = G_front × (1 + BG / 100)
 ```
 
 | Variable | Description | Unit |
@@ -958,9 +977,11 @@ G_total = G_front + (G_rear × φ)
 | `G_front` | Front-side POA irradiance | W/m² |
 | `BG` | Bifacial gain percentage | % |
 | `G_rear` | Measured rear ground-reflected irradiance | W/m² |
-| `φ` | Module bifaciality factor | dimensionless (default: 0.70) |
+| `φ` | Module bifaciality factor — user input, 0 < φ ≤ 1 (pre-filled 0.70) | dimensionless |
 
-**G. Operating Efficiency (η_op)**
+For Method 1 the calculator also reports the equivalent gain, `BG = φ × G_rear / G_front × 100`. `P_rated` is the front-side STC rating, so `P_expected` credits the rear-side contribution through `G_total`. Operating efficiency is therefore expressed against effective irradiance rather than front irradiance alone.
+
+**H. Operating Efficiency (η_op)**
 
 ```
 η_op (%) = [ P_measured / (A × G_total) ] × 100
@@ -972,7 +993,7 @@ G_total = G_front + (G_rear × φ)
 | `A` | Module active area | m² |
 | `G_total` | Total effective POA irradiance | W/m² |
 
-**H. Temperature-Corrected Efficiency (η_tc)**
+**I. Temperature-Corrected Efficiency (η_tc)**
 
 Normalises operating efficiency to 25°C for fair comparison across seasons and measurement times:
 
@@ -987,7 +1008,9 @@ Normalises operating efficiency to 25°C for fair comparison across seasons and 
 
 **Directional behaviour:** When T_cell > 25°C (typical summer field condition), the denominator is less than 1, so η_tc > η_op. The correction reveals what efficiency the module would have shown at STC temperature — removing the thermal penalty from the measurement.
 
-**I. Thermal Loss**
+If the correction factor `1 + (γ / 100) × (T_cell − 25)` is zero or negative, the temperature-corrected efficiency is undefined and is displayed as "--".
+
+**J. Thermal Loss**
 
 ```
 Thermal Loss (%) = -γ × (T_cell - 25)
@@ -995,7 +1018,7 @@ Thermal Loss (%) = -γ × (T_cell - 25)
 
 Expressed as a positive percentage when T_cell > 25°C (loss condition). Negative when T_cell < 25°C (gain condition).
 
-**J. Expected Output Power (P_expected)**
+**K. Expected Output Power (P_expected)**
 
 ```
 P_expected = P_rated × (G_total / 1000) × [ 1 + (γ / 100) × (T_cell - 25) ]
@@ -1003,7 +1026,7 @@ P_expected = P_rated × (G_total / 1000) × [ 1 + (γ / 100) × (T_cell - 25) ]
 
 This is the power the module should produce at the current irradiance and cell temperature, given its nameplate rating and temperature coefficient.
 
-**K. Module Performance Ratio (Module PR)**
+**L. Module Performance Ratio (Module PR)**
 
 ```
 Module PR (%) = (P_measured / P_expected) × 100
@@ -1013,9 +1036,10 @@ This is a module-level health index — the ratio of actual measured output to e
 
 | Module PR Range | Interpretation |
 |-----------------|----------------|
-| ≥ 95% | Optimal — module performing close to temperature-corrected nameplate target |
-| 85% – 95% | Acceptable — minor losses from soiling, cabling, or aging |
-| < 85% | Alert — investigate for soiling, shading, diode damage, or PID |
+| > 105% | Above model — verify irradiance, temperature, γ, or whether the module's flash-test power exceeds nameplate |
+| 95% – 105% | Optimal — module performing close to temperature-corrected nameplate target |
+| 90% – 95% | Acceptable — minor losses from soiling, cabling, or aging |
+| < 90% | Alert — investigate for soiling, shading, diode damage, or PID |
 
 ### 12.4 Input Validation Rules
 
@@ -1023,23 +1047,29 @@ This is a module-level health index — the ratio of actual measured output to e
 
 | Input | Hard Block | Warning |
 |-------|------------|---------|
-| Measured DC Power (`P_measured`) | < 0 W; > P_rated × 1.5 (150% of nameplate — physically impossible) | > P_rated × 1.15 (cloud-edge enhancement spike possible) |
+| Measured DC Power (`P_measured`) | Blank; < 0 W; > 1.5 × `P_ref` | > 1.15 × `P_ref` (cloud-edge enhancement spike possible) |
 | STC Efficiency (calculated) | > 40% (catches mm-instead-of-meters dimension entry) | < 10% (unusually low); > 25% (premium IBC/tandem range) |
 | Operating Efficiency (calculated) | > η_STC × 1.3 (130% of module's own STC — anomalous sensor reading) | > η_STC × 1.1 (cold temperature or cloud spike — verify) |
-| Wind Speed | < 0 m/s; > 50 m/s (severe hurricane limit) | > 20 m/s (high-wind verification) |
-| Temperature Coefficient (γ) | magnitude = 0 %/°C; magnitude > 0.60 %/°C | magnitude < 0.10 %/°C (unusually low — tandem prototype range); magnitude > 0.45 %/°C (older polycrystalline range) |
+| Wind Speed | Validated only if entered: < 0 m/s; > 50 m/s (severe hurricane limit). Required only when the Faiman source is selected | > 20 m/s (high-wind verification) |
+| Temperature Coefficient (γ) | Blank; magnitude = 0 %/°C; magnitude > 0.60 %/°C | magnitude < 0.10 %/°C (unusually low — tandem prototype range); magnitude > 0.45 %/°C (older polycrystalline range); a positive entry is treated as negative |
 | Module Area | ≤ 0 m² | — |
+| Rated Power (`P_rated`) and POA Irradiance (`G_front`) | Blank or ≤ 0 | — |
+| Cell temperature source inputs | Required input for the selected source is blank: Direct = cell temperature; RTD = `T_mod` and `ΔT_cond`; NOCT = `T_amb` and `NOCT`; Faiman = `T_amb` and `WS` | NOCT outside 35–55 °C; calculated `T_cell` outside −30 to 90 °C |
+| `ΔT_cond` (RTD source) | < 0 °C; > 10 °C | — |
+| Bifaciality factor `φ` (rear-irradiance method) | Blank; ≤ 0; > 1 (catches 70 entered for 0.70) | — |
+| Rear irradiance `G_rear` (rear-irradiance method) | Blank or < 0 | > 40% of `G_front` (check rear sensor) |
+| Bifacial gain `BG` (gain method) | Blank; < 0%; > 50% | > 30% |
 
 **On the 40% STC efficiency hard block:** The most efficient commercially available single-junction silicon modules reach approximately 24–26% under STC. Tandem/multi-junction research cells have exceeded 30% in laboratory conditions but are not in general commercial deployment. A calculated STC efficiency above 40% invariably indicates a unit entry error — most commonly, module dimensions entered in millimetres rather than metres.
 
-**On the 150% measured power hard block:** Under extreme cloud-edge enhancement events, POA irradiance can briefly exceed 1000 W/m², and measured power can transiently exceed nameplate rating. The 1.15× warning threshold captures this range. Values above 1.5× nameplate are not physically plausible for flat-plate modules and indicate a data error.
+**On the measured power limits:** Under extreme cloud-edge enhancement events, POA irradiance can briefly exceed 1000 W/m², and measured power can transiently exceed nameplate rating. The reference power `P_ref = P_rated × max(1, G_total / 1000)` therefore scales with effective irradiance, so bifacial modules and readings above 1000 W/m² are not falsely blocked. The 1.15× warning captures the plausible transient range. Values above 1.5× `P_ref` are not physically plausible for flat-plate modules and indicate a data error.
 
 #### SCADA CSV Parser
 
 | Condition | Action |
 |-----------|--------|
 | Missing required column (Timestamp, Panel Name, Measured DC Power, Irradiance) | Abort parsing — validation error |
-| Missing temperature column (neither Module Temperature nor Ambient Temperature present) | Abort parsing — at least one temperature input required |
+| Missing temperature column (none of Module Temperature, Cell Temperature or Ambient Temperature present) | Abort parsing — at least one temperature input required |
 | Blank or whitespace-only row | Skipped silently |
 | Incomplete row (fewer values than headers) | Skipped with warning logged |
 | Duplicate timestamp + panel name combination | Skipped with warning logged |
@@ -1047,36 +1077,50 @@ This is a module-level health index — the ratio of actual measured output to e
 | Negative measured power | Set to 0, warning logged |
 | Module temperature outside −40°C to 100°C | Warning logged, row retained |
 | Irradiance > 1500 W/m² | Warning logged ("Check sensors"), row retained |
-| Irradiance < 50 W/m² | **Excluded from efficiency calculations** (nighttime filtering — see §12.5 of this document) |
-| Corrupted row (parse error) | Skipped with error logged; valid rows continue processing |
+| Front-side irradiance < 50 W/m² | **Excluded from efficiency calculations** (nighttime filtering — see §12.5 of this document) |
+| Missing timestamp | Skipped with warning logged |
+| Unrecognised timestamp format | Warning logged, row retained but excluded from the time-series chart |
+| Measured DC Power or Irradiance missing or not numeric | Skipped with warning logged |
+| Valid rows beyond 1,000 | Remaining rows ignored, warning logged |
+| More than 10 distinct panel names | Rows for the additional panels ignored, warning logged |
+| No usable cell temperature for a row (no cell, module or ambient value) | Row excluded from statistics, count logged |
+| Panel has no valid rated power, area or temperature coefficient (CSV and Manual tab) | Panel skipped, error logged |
+| File larger than 5 MB | Rejected before parsing |
 
-**Delimiter auto-detection:** The parser counts comma and semicolon occurrences in the header row and selects whichever appears more frequently. Both decimal representations (period and comma as decimal separator) are handled.
+**Delimiter auto-detection:** The parser splits the header row (honouring double-quoted fields) with both comma and semicolon and selects the delimiter that produces more columns. Quoted fields containing the delimiter are supported, and a UTF-8 byte-order mark is ignored. Numbers may use a period or a comma as the decimal separator, with optional thousands separators (for example `1,234.5`, `1.234,5` and `12,5` are all accepted).
 
-**Column name matching:** Case-insensitive regex pattern matching. Accepted variations include `DC_Power`, `DCPower`, `dc power`, `p_dc`, `irradiance`, `irr`, `poa`, `g_`, `module_temp`, `t_mod`, `ambient`, `t_amb`, and others.
+**Column name matching:** Case-insensitive pattern matching on the header row; the first matching column wins. Accepted variations include `DC_Power`, `DCPower`, `dc power`, `p_dc`, `irradiance`, `irr`, `poa`, `g_`, `module_temp`, `t_mod`, `cell_temp`, `ambient`, `t_amb`, `wind`, `rear_irradiance`, `rated_power`, `area`, `temp_coeff`, `gamma` and `bifaciality`. The "rated" pattern must start a word, so a column such as "Generated Power" is read as measured power, not rated power. Columns whose names contain "volt" or "curr" (for example DC Voltage, DC Current) are never read as measured power.
 
 ### 12.5 Nighttime Filtering
 
-SCADA records where irradiance is below **50 W/m²** are excluded from efficiency averages and statistical calculations. This threshold is applied because:
+SCADA records where front-side plane-of-array irradiance is below **50 W/m²** are excluded from efficiency averages and statistical calculations. This threshold is applied because:
 
 - Below approximately 50–100 W/m², shunt resistance losses become disproportionately significant relative to total power flow
 - Pyranometer and power meter signal-to-noise ratios degrade at very low irradiance, producing unreliable efficiency ratios
 - Dividing near-zero measured power by near-zero irradiance amplifies measurement noise into meaningless efficiency values
+
 Excluded rows are counted in total row tallies but not in valid-record statistics. This is consistent with common SCADA data processing practice for PV performance analysis.
+
+Records with zero measured power at irradiance of 50 W/m² or more are retained: outages and tripped strings lower the average efficiency and the Module Health score, as they should.
 
 ### 12.6 SCADA Mode Statistical Outputs Per Module
 
-For each unique panel identifier in the uploaded CSV, the following statistics are computed from all valid (irradiance ≥ 50 W/m²) records:
+For each unique panel identifier in the uploaded CSV, the following statistics are computed from all valid records (front-side irradiance ≥ 50 W/m² and a usable cell temperature):
 
 | Metric | Formula | Description |
 |--------|---------|-------------|
 | Average Operating Efficiency | `η̄ = Σηᵢ / N` | Arithmetic mean across all valid rows |
 | Peak Efficiency | `max(ηᵢ)` | Highest single-row efficiency |
-| Median Efficiency | Middle value of sorted η values | Less sensitive to outliers than mean |
-| Standard Deviation (σ) | `σ = √[ Σ(ηᵢ − η̄)² / N ]` | Population standard deviation — consistency measure |
+| Median Efficiency | Middle value of sorted η values (mean of the two middle values when N is even) | Less sensitive to outliers than mean |
+| Standard Deviation (σ) | `σ = √[ Σ(ηᵢ − η̄)² / (N − 1) ]` | Sample standard deviation (0 when N = 1) — consistency measure |
 | Average Thermal Loss | `Σ ThermalLossᵢ / N` | Mean thermal loss across all valid rows |
 | Module Health (PR) | `Σ P_measured / Σ P_expected` | Ratio of total measured to total expected output |
 
 **Note on standard deviation in SCADA mode:** A high σ across a day's readings for a single module suggests inconsistent performance — possible causes include partial shading at certain times of day, soiling concentrated on part of the module surface, or intermittent string-level issues. A low σ with low average efficiency suggests a consistent, uniform loss (soiling, degradation, or persistent shading).
+
+**Module specification used in SCADA mode:** For each panel, Rated Power, Area, Temp Coeff and Bifaciality are taken from the CSV when present (first non-empty value for that panel); any missing value falls back to the Manual tab. Results are recalculated whenever the Performance Analysis or Interactive Charts tab is opened, so changes on the Manual tab are reflected. Each analysed SCADA panel is also added to (or updated in) the comparison list, within the 10-module limit.
+
+**Row-level cell temperature (priority order):** (1) Cell Temperature column; (2) Module Temperature + (`G_total` / 1000) × `ΔT_cond`; (3) ambient model — Faiman when the Manual tab source is Faiman and the row has a wind speed, otherwise NOCT. Rows with none of these are excluded from the statistics and the count is logged. If a Rear Irradiance column is present, `G_total = G_front + φ × G_rear`; otherwise `G_total = G_front`.
 
 ### 12.7 File Constraints
 
@@ -1085,6 +1129,7 @@ For each unique panel identifier in the uploaded CSV, the following statistics a
 | File formats | `.csv` only | SCADA mode; browser memory limits |
 | Maximum rows | 1,000 per upload | Browser-side processing capacity |
 | Maximum unique panel identifiers | 10 per upload | Comparison and chart rendering limit |
+| Maximum file size | 5 MB | Browser memory and parsing time |
 
 For larger datasets or longer date ranges, split the export by date range or panel group and analyse each batch separately.
 
@@ -1164,22 +1209,40 @@ Module PR = (245 / 256.1) × 100 = 95.7%
 
 **Result: Module PR of 95.7% — within the Optimal band (≥ 95%). No fault indicated.**
 
+**Worked Example 2 — Bifacial module (field-style calculation)**
+
+**Inputs:** `G_front` = 900 W/m², `G_rear` = 120 W/m², φ = 0.80, A = 2.10 m², `P_measured` = 450 W, `P_rated` = 500 Wp, γ = −0.28 %/°C, cell temperature source = Direct cell temperature, `T_cell` = 45 °C.
+
+```
+Step 1 — Effective irradiance:  G_total = 900 + 0.80 × 120 = 996 W/m²
+         (equivalent bifacial gain = 0.80 × 120 / 900 = 10.67%)
+Step 2 — Operating efficiency:  η_op = 450 / (2.10 × 996) × 100 = 21.51%
+Step 3 — Temperature factor:    1 + (−0.28/100) × (45 − 25) = 0.944
+Step 4 — Temp-corrected eff.:   η_tc = 21.51 / 0.944 = 22.79%
+Step 5 — Expected output:       P_expected = 500 × (996/1000) × 0.944 = 470.1 W
+Step 6 — Module PR:             450 / 470.1 × 100 = 95.7%
+```
+
+**Effect of the temperature source:** with the same inputs, the RTD source with `T_mod` = 42.5 °C and `ΔT_cond` = 3 °C gives `T_cell` = 42.5 + (996/1000) × 3 = 45.49 °C, `P_expected` = 469.4 W and Module PR = 95.9%. The NOCT model (`T_amb` = 31.2 °C, NOCT = 45 °C) gives `T_cell` = 62.3 °C, `P_expected` = 446.0 W and Module PR = 100.9%. Operating and STC efficiency do not depend on cell temperature and are unchanged. The difference between sources is why the calculator shows the cell temperature it used and where it came from.
+
 ### 12.11 STC Efficiency: Calculated vs. Manufacturer-Published
 
 A consistent gap of approximately 0.1–0.5% between the calculated STC efficiency (from footprint area) and the manufacturer's published figure is normal and does not indicate an error in either value. The cause is the area basis:
 
 - **Footprint calculation (this tool's default):** Uses frame-to-frame length × width. Includes non-active frame area.
 - **Manufacturer's published figure:** Typically uses tested active or aperture area, which excludes the frame border. This produces a slightly higher efficiency figure.
+
 When a datasheet provides an explicit efficiency figure, use that for datasheet comparisons. Use the footprint back-calculation only when the datasheet provides dimensions and power but no stated efficiency.
 
 ### 12.12 Limitations
 
 - Uses a **linear temperature coefficient model**, which is a good approximation near STC but loses accuracy at temperature extremes compared to full two-diode I-V curve models.
 - Does not account for **spectral mismatch** (Air Mass deviation from 1.5), **angle-of-incidence losses**, or **soiling** as separate line items. These appear indirectly as a lower Module PR, not as individually quantified losses.
-- **NOCT and Faiman models estimate cell temperature** from ambient conditions. A direct cell temperature measurement (embedded RTD or thermography) is always more accurate than either model. The back-of-module RTD input (+3°C delta for open-rack) is the most accurate field-practical option without thermography.
+- **NOCT and Faiman models estimate cell temperature** from ambient conditions. A direct cell temperature measurement (embedded RTD or thermography) is always more accurate than either model. The back-of-module RTD input (default ΔT of 3°C for open-rack mounting, user-editable) is the most accurate field-practical option without thermography.
 - Does not model **inverter, DC cabling, or mismatch losses**. Inputs should be at the module or string level, not whole-plant AC output.
 - SCADA mode is capped at **1,000 rows and 10 panel identifiers** per file. Intended for spot-checking and diagnostics, not full-season SCADA archiving.
-- When SCADA CSV data does not include module area or temperature coefficient columns, the SCADA analysis uses **default fallback values** (area: 2.58 m², γ: −0.34%/°C). These are pre-filled in the manual calculator as starting-point examples and should be replaced with the actual module specifications for accurate results.
+- SCADA mode reads **Rated Power, Area, Temp Coeff and Bifaciality** from the CSV when those columns are present. Any value missing from the CSV falls back to the Manual tab. If a panel still has no valid rated power, area or temperature coefficient, that panel is skipped and an error is logged; no hidden default values are applied. `ΔT_cond`, NOCT and the thermal model always come from the Manual tab.
+- For **bifacial modules**, operating efficiency is expressed against effective irradiance (front irradiance plus the bifaciality-weighted rear irradiance), and the NOCT, Faiman and RTD-offset temperature models also use that effective irradiance. This is a modelling simplification: rear-side irradiance does not heat the cells in exactly the same way as front-side irradiance.
 - This tool is not a substitute for full energy-yield simulation software (PVsyst, SAM, PlantPredict) for financial modelling or bankable yield estimates, nor for IEC 61215/61730 certification testing.
 ---
 
@@ -1635,7 +1698,7 @@ Insolation POA = 61.58 kWh/m²
 | `PR_expected` | Anticipated Performance Ratio | % | Not in IEC (custom metric) |
 | `P_AC` | Measured AC power output (instantaneous) | kW | — |
 | `η` | DC-to-AC inverter conversion efficiency | % | IEC 61683 |
-| `σ` | Population standard deviation of efficiency values | % | — |
+| `σ` | Standard deviation of efficiency values — population (÷ N) in the Solar Inverter Efficiency Dashboard; sample (÷ N − 1) in the Solar Panel Efficiency Calculator | % | — |
 | `Δt` | Time interval between consecutive timestamps | hours | — |
 | `Eᵢ` | Energy for a single integration interval (trapezoidal method) | Wh or kWh | — |
 | `P_rated` | Module nameplate rated power (P_mp) at STC | Wp | — (module datasheet) |
@@ -1646,15 +1709,15 @@ Insolation POA = 61.58 kWh/m²
 | `T_amb` | Ambient air temperature | °C | — |
 | `T_mod` | Measured back-of-module temperature | °C | — |
 | `NOCT` | Nominal Operating Cell Temperature | °C | — (module datasheet) |
-| `U0` | Faiman model conductive/radiative heat loss coefficient | W/m²K | 29.0 (fixed; not Faiman's published 25.0 — see §12.3 D) |
-| `U1` | Faiman model convective heat loss coefficient | W/m²K/(m/s) | 6.9 (fixed; not Faiman's published 6.84 — see §12.3 D) |
+| `U0` | Faiman model conductive/radiative heat loss coefficient | W/m²K | 25.0 (fixed; Faiman 2008 published fit, also the pvlib default — see §12.3 E) |
+| `U1` | Faiman model convective heat loss coefficient | W/m²K/(m/s) | 6.84 (fixed; Faiman 2008 published fit, also the pvlib default — see §12.3 E) |
 | `WS` | Wind speed | m/s | — |
 | `G_front` | Front-side plane-of-array irradiance | W/m² | — |
 | `G_rear` | Rear ground-reflected irradiance (bifacial) | W/m² | — |
 | `G_total` | Total effective irradiance (mono- or bifacial) | W/m² | — |
 | `BG` | Bifacial gain percentage | % | — |
-| `φ` | Module bifaciality factor | dimensionless | — (module datasheet) |
-| `ΔT_cond` | Cell-to-back-of-module temperature delta at 1000 W/m² | °C | 3°C (open-rack default) |
+| `φ` | Module bifaciality factor | dimensionless | User input, 0 < φ ≤ 1 (module datasheet; pre-filled 0.70) |
+| `ΔT_cond` | Cell-to-back-of-module temperature delta at 1000 W/m² | °C | User input, 0–10 °C (default 3 °C, open-rack) |
 | `P_measured` | Measured DC power output from module | W | — |
 | `P_expected` | Expected DC power output at current conditions | W | — |
 | `Module PR` | Module Performance Ratio (health index) | % | Not an IEC plant-level metric |
@@ -1682,6 +1745,7 @@ Insolation POA = 61.58 kWh/m²
 - Jordan, D.C. & Kurtz, S.R. (2013). *Photovoltaic Degradation Rates — An Analytical Review*. Progress in Photovoltaics: Research and Applications, 21(1), 12–29. [DOI: 10.1002/pip.1182](https://doi.org/10.1002/pip.1182)
 - NREL. *Best Practices for Operation and Maintenance of Photovoltaic and Energy Storage Systems*, 3rd Edition (2019). [nrel.gov/docs/fy19osti/73822.pdf](https://www.nrel.gov/docs/fy19osti/73822.pdf)
 - Micheli, L. et al. (2021). *Photovoltaic soiling monitoring, losses, and efficiency*. Progress in Photovoltaics: Research and Applications. [DOI: 10.1002/pip.3441](https://doi.org/10.1002/pip.3441)
+- King, D.L., Boyson, W.E. & Kratochvil, J.A. (2004). *Photovoltaic Array Performance Model*. Sandia National Laboratories, SAND2004-3535. (Source of the back-of-module to cell temperature offset, ΔT, used for the RTD source.)
 ---
 
 ## Notes on Implementation
@@ -1695,4 +1759,4 @@ Insolation POA = 61.58 kWh/m²
 
 *Maintained by Aman Yadav — [kindastuff.com](https://kindastuff.com/) | [LinkedIn](https://www.linkedin.com/in/aman-yadav55/)*
 
-*Last updated: October 2026*
+*Last updated: November 2026*
